@@ -1,0 +1,2553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medihub — Healthcare Portal & Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top right, #1e1b4b, #09090b);
+            min-height: 100vh;
+            color: #f4f4f5;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 12px 30px rgba(99, 102, 241, 0.1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #4f46e5, #6366f1);
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-primary:hover {
+            opacity: 0.95;
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 999px;
+        }
+    </style>
+</head>
+<body class="custom-scrollbar">
+
+    <!-- TOP NAVIGATION BAR -->
+    <nav class="glass-panel sticky top-0 z-40 px-6 py-4 flex items-center justify-between shadow-2xl">
+        <div class="flex items-center gap-3">
+            <span class="text-3xl text-indigo-500"><i class="fa-solid fa-heart-pulse animate-pulse"></i></span>
+            <span class="text-2xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">MEDIHUB</span>
+        </div>
+        <div class="flex items-center gap-6" id="nav-user-area">
+            <!-- Dynamic elements will be inserted here -->
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8">
+        
+        <!-- SIDEBAR NAVIGATION (Only when logged in) -->
+        <aside class="w-full lg:w-64 shrink-0 hidden" id="sidebar">
+            <div class="glass-panel rounded-2xl p-4 flex flex-col gap-2 shadow-xl">
+                <p class="text-xs uppercase text-indigo-400 font-bold tracking-wider px-3 mb-2">Navigation</p>
+                <button onclick="switchTab('feed-tab')" id="btn-feed-tab" class="tab-btn flex items-center gap-3 w-full text-left py-3 px-4 rounded-xl text-indigo-200 hover:bg-indigo-950/40 hover:text-white transition-all">
+                    <i class="fa-solid fa-house-medical text-lg"></i>
+                    <span>Emergency Feed</span>
+                </button>
+                <button onclick="switchTab('blogs-tab')" id="btn-blogs-tab" class="tab-btn flex items-center gap-3 w-full text-left py-3 px-4 rounded-xl text-indigo-200 hover:bg-indigo-950/40 hover:text-white transition-all">
+                    <i class="fa-solid fa-book-medical text-lg"></i>
+                    <span>Health Blogs</span>
+                </button>
+                <button onclick="switchTab('dashboard-tab')" id="btn-dashboard-tab" class="tab-btn flex items-center gap-3 w-full text-left py-3 px-4 rounded-xl text-indigo-200 hover:bg-indigo-950/40 hover:text-white transition-all">
+                    <i class="fa-solid fa-id-card text-lg"></i>
+                    <span>My Dashboard</span>
+                </button>
+                <div class="border-t border-white/5 my-4"></div>
+                <button onclick="triggerLogout()" class="flex items-center gap-3 w-full text-left py-3 px-4 rounded-xl text-rose-300 hover:bg-rose-950/20 hover:text-rose-100 transition-all">
+                    <i class="fa-solid fa-right-from-bracket text-lg"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-grow">
+            <!-- TOAST NOTIFICATION CONTAINER -->
+            <div id="toast" class="hidden fixed bottom-6 right-6 z-50 py-3 px-6 rounded-xl shadow-2xl glass-panel border border-indigo-500/30 flex items-center gap-3 transition-all duration-300 transform translate-y-10 opacity-0">
+                <span id="toast-icon" class="text-xl text-indigo-400"><i class="fa-solid fa-circle-info"></i></span>
+                <span id="toast-message" class="text-sm font-semibold">Message here...</span>
+            </div>
+
+            <!-- SECTION: AUTHENTICATION PANEL -->
+            <section id="auth-section" class="max-w-xl mx-auto mt-8">
+                <div class="glass-panel rounded-3xl p-8 shadow-2xl">
+                    <div class="flex border-b border-white/10 mb-6">
+                        <button onclick="toggleAuthTab('login')" id="auth-login-btn" class="w-1/2 pb-4 font-bold text-lg text-indigo-400 border-b-2 border-indigo-500">Log In</button>
+                        <button onclick="toggleAuthTab('register')" id="auth-register-btn" class="w-1/2 pb-4 font-bold text-lg text-zinc-400 hover:text-zinc-200">Register</button>
+                    </div>
+
+                    <!-- LOGIN FORM -->
+                    <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-2">Email Address</label>
+                            <input type="email" id="login-email" required placeholder="name@email.com" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-2">Password</label>
+                            <input type="password" id="login-password" required placeholder="•••••••••" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <button type="submit" class="w-full btn-primary py-3.5 rounded-xl font-bold text-white mt-6">Continue</button>
+                    </form>
+
+                    <!-- REGISTER FORM -->
+                    <form id="register-form" onsubmit="handleRegister(event)" class="space-y-4 hidden">
+                        <div>
+                            <label class="block text-sm font-semibold mb-2">User Role Type</label>
+                            <select id="register-role" onchange="onRoleChange()" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                                <option value="regular">Regular User (Patient)</option>
+                                <option value="doctor">Doctor</option>
+                                <option value="blood_donor">Blood Donor</option>
+                                <option value="ambulance">Ambulance Service Provider</option>
+                                <option value="pharmacy">Pharmacy Owner</option>
+                                <option value="diagnostic">Diagnostic Center Owner</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold mb-2" id="first-name-label">First Name</label>
+                                <input type="text" id="register-first-name" required placeholder="John" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-2" id="last-name-label">Last Name</label>
+                                <input type="text" id="register-last-name" required placeholder="Doe" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-2">Email Address</label>
+                            <input type="email" id="register-email" required placeholder="john.doe@example.com" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold mb-2">Password</label>
+                                <input type="password" id="register-password" required placeholder="Min. 9 characters" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-2">Contact Number</label>
+                                <input type="text" id="register-contact" required placeholder="017xxxxxxxx" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold mb-2">Gender</label>
+                                <select id="register-gender" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-2">Date of Birth</label>
+                                <input type="date" id="register-dob" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+
+                        <!-- LOCATION GRID -->
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold mb-1 text-slate-400">Division</label>
+                                <select id="register-division" onchange="loadDistricts(this.value)" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-2 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+                                    <option value="">Select</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold mb-1 text-slate-400">District</label>
+                                <select id="register-district" onchange="loadUpazilas(this.value)" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-2 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+                                    <option value="">Select</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold mb-1 text-slate-400">Upazila</label>
+                                <select id="register-upazila" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-2 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+                                    <option value="">Select</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- ROLE SPECIFIC REGISTRATION FIELDS -->
+                        <div id="role-extra-fields" class="space-y-4 pt-2 border-t border-white/5">
+                            <!-- Dynamic fields added via JS -->
+                        </div>
+
+                        <button type="submit" class="w-full btn-primary py-3.5 rounded-xl font-bold text-white mt-6">Register & Send OTP</button>
+                    </form>
+
+                    <!-- OTP VERIFICATION SCREEN -->
+                    <div id="otp-section" class="space-y-4 hidden text-center">
+                        <span class="text-4xl text-indigo-400"><i class="fa-solid fa-shield-envelope"></i></span>
+                        <h3 class="text-xl font-bold mt-2">Enter verification OTP</h3>
+                        <p class="text-sm text-slate-400">We sent a 6-digit verification code to your email.</p>
+                        <input type="text" id="otp-input" placeholder="123456" class="w-48 bg-slate-900/50 border border-white/20 rounded-xl py-3 text-center text-xl tracking-widest font-extrabold text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        <div class="flex gap-4 max-w-xs mx-auto">
+                            <button onclick="handleVerifyOtp()" class="flex-grow btn-primary py-2.5 rounded-xl font-bold">Verify Code</button>
+                            <button onclick="resendOtp()" class="bg-white/5 border border-white/10 hover:bg-white/10 px-4 rounded-xl py-2.5 text-sm font-semibold">Resend</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION: MAIN DOCK -->
+            <div id="app-dock" class="hidden flex flex-col gap-8">
+                
+                <!-- TAB 1: EMERGENCY NEED FEED -->
+                <div id="feed-tab" class="space-tab space-y-6">
+                    <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                        <div>
+                            <h2 class="text-2xl font-bold tracking-tight">Need Posts Feed</h2>
+                            <p class="text-xs text-slate-400">Emergency medicine, blood, diagnostics, and equipment requirements</p>
+                        </div>
+                        <button onclick="openCreatePostModal()" class="btn-primary py-2.5 px-5 rounded-xl font-bold text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-plus-circle"></i>
+                            <span>Create Post</span>
+                        </button>
+                    </div>
+
+                    <!-- Category Filters -->
+                    <div class="flex flex-wrap gap-2 mb-6" id="feed-filters">
+                        <button onclick="filterFeed('all')" class="feed-filter-btn px-4 py-2 bg-indigo-600 rounded-lg text-xs font-bold text-white">All Posts</button>
+                        <button onclick="filterFeed('blood_need')" class="feed-filter-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Blood Needs</button>
+                        <button onclick="filterFeed('blood_donation')" class="feed-filter-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Blood Donations</button>
+                        <button onclick="filterFeed('medicine_need')" class="feed-filter-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Medicine Needs</button>
+                        <button onclick="filterFeed('equipment_need')" class="feed-filter-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Equipment Needs</button>
+                        <button onclick="filterFeed('ambulance_need')" class="feed-filter-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Ambulance Needs</button>
+                        <button onclick="filterFeed('general')" class="feed-filter-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Generals</button>
+                    </div>
+
+                    <!-- POSTS CARD CONTAINER -->
+                    <div id="posts-container" class="space-y-4">
+                        <!-- Dynamic Feed cards loaded via JS -->
+                    </div>
+                </div>
+
+                <!-- TAB 2: HEALTH BLOGS -->
+                <div id="blogs-tab" class="space-tab space-y-6 hidden">
+                    <div class="border-b border-white/5 pb-4">
+                        <h2 class="text-2xl font-bold tracking-tight">Health & Wellness Blogs</h2>
+                        <p class="text-xs text-slate-400">Verified doctor articles and safety advices</p>
+                    </div>
+                    <div id="blogs-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Blogs list -->
+                    </div>
+                </div>
+
+                <!-- TAB 3: PROFILE DASHBOARDS -->
+                <div id="dashboard-tab" class="space-tab hidden">
+                    <!-- Dynamic Role Dashboards will be injected here -->
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- MODAL: CREATE POST -->
+    <div id="create-post-modal" class="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl relative">
+            <button onclick="closeCreatePostModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="text-xl font-bold mb-4">Create Need Post</h3>
+            
+            <form onsubmit="submitPost(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Post Category</label>
+                    <select id="post-type" onchange="renderPostForm(this.value)" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                        <option value="general">General Post</option>
+                        <option value="blood_need">Blood Need Post</option>
+                        <option value="medicine_need">Medicine Need Post</option>
+                        <option value="equipment_need">Equipment Need Post</option>
+                        <option value="ambulance_need">Ambulance Need Post</option>
+                    </select>
+                </div>
+
+                <!-- Dynamic Form Fields Container -->
+                <div id="post-form-fields" class="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    <!-- Loaded dynamically -->
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 text-slate-400">Division</label>
+                        <select id="post-division" onchange="loadPostDistricts(this.value)" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+                            <option value="">Select</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 text-slate-400">District</label>
+                        <select id="post-district" onchange="loadPostUpazilas(this.value)" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+                            <option value="">Select</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 text-slate-400">Upazila</label>
+                        <select id="post-upazila" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+                            <option value="">Select</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full btn-primary py-3 rounded-xl font-bold mt-4">Publish Post</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: BOOKING APPOINTMENT -->
+    <div id="booking-modal" class="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl relative">
+            <button onclick="closeBookingModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="text-xl font-bold mb-2">Book Doctor Appointment</h3>
+            <p id="booking-doctor-title" class="text-xs text-indigo-400 font-semibold mb-4">Doctor Details</p>
+            
+            <form onsubmit="submitBooking(event)" class="space-y-4">
+                <input type="hidden" id="booking-doctor-id">
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Select Available Date & Place</label>
+                    <select id="booking-slot-id" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                        <option value="">Choose slot</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Patient Full Name</label>
+                    <input type="text" id="booking-patient-name" required placeholder="Patient Name" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Contact Phone Number</label>
+                    <input type="text" id="booking-contact" required placeholder="017xxxxxxxx" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Problem Description</label>
+                    <textarea id="booking-problem" placeholder="Describe symptoms briefly" rows="3" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <button type="submit" class="w-full btn-primary py-3 rounded-xl font-bold mt-2">Book Seat Now</button>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- JAVASCRIPT APP MODULE -->
+    <script>
+        const API_BASE = window.location.origin;
+
+        // Global State variables
+        let appUser = null;
+        let activeTab = 'feed-tab';
+        let feedFilter = 'all';
+        let currentAuthTab = 'login';
+        let signupSessionEmail = '';
+
+        // Initialize App on DOM Loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthSession();
+            loadDivisions();
+        });
+
+        // -------------------------------------------------------------
+        // AUTHENTICATION AND SESSIONS
+        // -------------------------------------------------------------
+        function checkAuthSession() {
+            const token = localStorage.getItem('access_token');
+            const storedUser = localStorage.getItem('user_data');
+            
+            if (token && storedUser) {
+                appUser = JSON.parse(storedUser);
+                setupInterfaceLoggedIn();
+            } else {
+                setupInterfaceLoggedOut();
+            }
+        }
+
+        function setupInterfaceLoggedIn() {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('app-dock').classList.remove('hidden');
+            document.getElementById('sidebar').classList.remove('hidden');
+            
+            // Header bar user area
+            const userArea = document.getElementById('nav-user-area');
+            let badgeColor = "bg-indigo-950 text-indigo-400 border border-indigo-700/50";
+            if (appUser.user_type === 'admin') badgeColor = "bg-red-950 text-red-400 border border-red-700/50";
+            
+            userArea.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="text-right">
+                        <p class="text-sm font-bold text-zinc-200">${appUser.email}</p>
+                        <span class="inline-block text-[10px] uppercase font-bold tracking-wider rounded px-1.5 py-0.5 ${badgeColor}">${appUser.user_type}</span>
+                    </div>
+                    <div class="w-10 h-10 rounded-full bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center font-bold text-indigo-300">
+                        ${appUser.email[0].toUpperCase()}
+                    </div>
+                </div>
+            `;
+            
+            switchTab('feed-tab');
+        }
+
+        function setupInterfaceLoggedOut() {
+            document.getElementById('auth-section').classList.remove('hidden');
+            document.getElementById('app-dock').classList.add('hidden');
+            document.getElementById('sidebar').classList.add('hidden');
+            document.getElementById('nav-user-area').innerHTML = `
+                <span class="text-sm text-slate-400"><i class="fa-solid fa-lock"></i> Secured API Sandbox</span>
+            `;
+        }
+
+        // Toggle Sign Up vs Login form tabs
+        function toggleAuthTab(tab) {
+            currentAuthTab = tab;
+            const loginForm = document.getElementById('login-form');
+            const registerForm = document.getElementById('register-form');
+            const loginBtn = document.getElementById('auth-login-btn');
+            const registerBtn = document.getElementById('auth-register-btn');
+
+            if (tab === 'login') {
+                loginForm.classList.remove('hidden');
+                registerForm.classList.add('hidden');
+                loginBtn.className = "w-1/2 pb-4 font-bold text-lg text-indigo-400 border-b-2 border-indigo-500";
+                registerBtn.className = "w-1/2 pb-4 font-bold text-lg text-zinc-400 hover:text-zinc-200";
+            } else {
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+                registerBtn.className = "w-1/2 pb-4 font-bold text-lg text-indigo-400 border-b-2 border-indigo-500";
+                loginBtn.className = "w-1/2 pb-4 font-bold text-lg text-zinc-400 hover:text-zinc-200";
+            }
+        }
+
+        // -------------------------------------------------------------
+        // LOCATION APIs (DIVISIONS, DISTRICTS, UPAZILAS)
+        // -------------------------------------------------------------
+        async function loadDivisions() {
+            try {
+                const res = await fetch(`${API_BASE}/location/divisions/`);
+                const data = await res.json();
+                const divSelect = document.getElementById('register-division');
+                const postDivSelect = document.getElementById('post-division');
+                
+                divSelect.innerHTML = '<option value="">Select Division</option>';
+                postDivSelect.innerHTML = '<option value="">Select Division</option>';
+                
+                data.forEach(div => {
+                    const html = `<option value="${div.id}">${div.division_name_eng}</option>`;
+                    divSelect.insertAdjacentHTML('beforeend', html);
+                    postDivSelect.insertAdjacentHTML('beforeend', html);
+                });
+            } catch (err) {
+                console.error("Failed to load divisions:", err);
+            }
+        }
+
+        async function loadDistricts(divisionId) {
+            if (!divisionId) return;
+            try {
+                const res = await fetch(`${API_BASE}/location/districts/?division=${divisionId}`);
+                const data = await res.json();
+                const districtSelect = document.getElementById('register-district');
+                
+                districtSelect.innerHTML = '<option value="">Select District</option>';
+                data.forEach(dist => {
+                    districtSelect.insertAdjacentHTML('beforeend', `<option value="${dist.id}">${dist.district_name_eng}</option>`);
+                });
+            } catch (err) {
+                console.error("Failed to load districts:", err);
+            }
+        }
+
+        async function loadUpazilas(districtId) {
+            if (!districtId) return;
+            try {
+                const res = await fetch(`${API_BASE}/location/upazilas/?district=${districtId}`);
+                const data = await res.json();
+                const upazilaSelect = document.getElementById('register-upazila');
+                
+                upazilaSelect.innerHTML = '<option value="">Select Upazila</option>';
+                data.forEach(upz => {
+                    upazilaSelect.insertAdjacentHTML('beforeend', `<option value="${upz.id}">${upz.upozila_name_eng}</option>`);
+                });
+            } catch (err) {
+                console.error("Failed to load upazilas:", err);
+            }
+        }
+
+        // Location functions for posting form
+        async function loadPostDistricts(divisionId) {
+            if (!divisionId) return;
+            try {
+                const res = await fetch(`${API_BASE}/location/districts/?division=${divisionId}`);
+                const data = await res.json();
+                const select = document.getElementById('post-district');
+                select.innerHTML = '<option value="">Select District</option>';
+                data.forEach(dist => {
+                    select.insertAdjacentHTML('beforeend', `<option value="${dist.id}">${dist.district_name_eng}</option>`);
+                });
+            } catch (err) {}
+        }
+
+        async function loadPostUpazilas(districtId) {
+            if (!districtId) return;
+            try {
+                const res = await fetch(`${API_BASE}/location/upazilas/?district=${districtId}`);
+                const data = await res.json();
+                const select = document.getElementById('post-upazila');
+                select.innerHTML = '<option value="">Select Upazila</option>';
+                data.forEach(upz => {
+                    select.insertAdjacentHTML('beforeend', `<option value="${upz.id}">${upz.upozila_name_eng}</option>`);
+                });
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // TAB NAVIGATION
+        // -------------------------------------------------------------
+        function switchTab(tabId) {
+            activeTab = tabId;
+            document.querySelectorAll('.space-tab').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('text-indigo-200');
+            });
+            const activeBtn = document.getElementById(`btn-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-indigo-200');
+                activeBtn.classList.add('bg-indigo-600', 'text-white');
+            }
+
+            if (tabId === 'feed-tab') {
+                loadFeed();
+            } else if (tabId === 'blogs-tab') {
+                loadBlogs();
+            } else if (tabId === 'dashboard-tab') {
+                loadDashboardSpecifics();
+            }
+        }
+
+        // -------------------------------------------------------------
+        // REGISTRATION FLOW (SIGNUP & OTP)
+        // -------------------------------------------------------------
+        function onRoleChange() {
+            const role = document.getElementById('register-role').value;
+            const container = document.getElementById('role-extra-fields');
+            
+            if (role === 'doctor') {
+                container.innerHTML = `
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">License Number</label>
+                        <input type="text" id="reg-license" required placeholder="BMDC-xxxx" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Specialization</label>
+                            <select id="reg-specialization" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                                <option value="1">Cardiology</option>
+                                <option value="2">Neurology</option>
+                                <option value="3">Dermatology</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">License Validity Date</label>
+                            <input type="date" id="reg-license-validity" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                `;
+            } else if (role === 'blood_donor') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Blood Group</label>
+                            <select id="reg-blood" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                                <option value="A+">A+</option>
+                                <option value="A-">A-</option>
+                                <option value="B+">B+</option>
+                                <option value="B-">B-</option>
+                                <option value="AB+">AB+</option>
+                                <option value="AB-">AB-</option>
+                                <option value="O+">O+</option>
+                                <option value="O-">O-</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Donor Availability</label>
+                            <select id="reg-available" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                                <option value="available">Available Now</option>
+                                <option value="unavailable">Unavailable</option>
+                            </select>
+                        </div>
+                    </div>
+                `;
+            } else if (role === 'ambulance') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Ambulance Type</label>
+                            <select id="reg-ambulance-type" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                                <option value="basic">Basic Life Support</option>
+                                <option value="advanced">Advanced Life Support</option>
+                                <option value="icu">ICU Ambulance</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Vehicle Number</label>
+                            <input type="text" id="reg-vehicle" required placeholder="DHAKA-METRO-HA-xxxx" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                `;
+            } else if (role === 'pharmacy') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Pharmacy Name</label>
+                            <input type="text" id="reg-pharmacy-name" required placeholder="Health Pharmacy" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Drug License Number</label>
+                            <input type="text" id="reg-pharmacy-license" required placeholder="DRUG-LIC-xxxxx" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">License Validity Date</label>
+                        <input type="date" id="reg-pharmacy-validity" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                `;
+            } else if (role === 'diagnostic') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Diagnostic Center Name</label>
+                            <input type="text" id="reg-diag-name" required placeholder="Medihub Diagnostics" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">License Number</label>
+                            <input type="text" id="reg-diag-license" required placeholder="DIAG-LIC-xxxx" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">License Validity Date</label>
+                        <input type="date" id="reg-diag-validity" required class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                `;
+            } else {
+                container.innerHTML = '';
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const role = document.getElementById('register-role').value;
+            const email = document.getElementById('register-email').value;
+            signupSessionEmail = email;
+
+            const formData = new FormData();
+            formData.append('email', email);
+            formData.append('password', document.getElementById('register-password').value);
+            formData.append('first_name', document.getElementById('register-first-name').value);
+            formData.append('last_name', document.getElementById('register-last-name').value);
+            formData.append('gender', document.getElementById('register-gender').value);
+            formData.append('date_of_birth', document.getElementById('register-dob').value);
+            formData.append('contact_number', document.getElementById('register-contact').value);
+            formData.append('division', document.getElementById('register-division').value);
+            formData.append('district', document.getElementById('register-district').value);
+            formData.append('upozila', document.getElementById('register-upazila').value);
+
+            if (role === 'doctor') {
+                formData.append('license_number', document.getElementById('reg-license').value);
+                formData.append('license_validity', document.getElementById('reg-license-validity').value);
+                formData.append('specialization', document.getElementById('reg-specialization').value);
+            } else if (role === 'blood_donor') {
+                formData.append('blood_group', document.getElementById('reg-blood').value);
+                formData.append('availability', document.getElementById('reg-available').value);
+            } else if (role === 'ambulance') {
+                formData.append('ambulance_type', document.getElementById('reg-ambulance-type').value);
+                formData.append('vehicle_number', document.getElementById('reg-vehicle').value);
+                formData.append('owner_name', document.getElementById('register-first-name').value + ' ' + document.getElementById('register-last-name').value);
+            } else if (role === 'pharmacy') {
+                formData.append('pharmacy_name', document.getElementById('reg-pharmacy-name').value);
+                formData.append('license_number', document.getElementById('reg-pharmacy-license').value);
+                formData.append('license_validity', document.getElementById('reg-pharmacy-validity').value);
+                formData.append('owner_name', document.getElementById('register-first-name').value + ' ' + document.getElementById('register-last-name').value);
+            } else if (role === 'diagnostic') {
+                formData.append('diagnostic_name', document.getElementById('reg-diag-name').value);
+                formData.append('license_number', document.getElementById('reg-diag-license').value);
+                formData.append('license_validity', document.getElementById('reg-diag-validity').value);
+                formData.append('owner_name', document.getElementById('register-first-name').value + ' ' + document.getElementById('register-last-name').value);
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/authentication/signup/${role}/register/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast("Registration successful! Verification code sent to email.");
+                    document.getElementById('register-form').classList.add('hidden');
+                    document.getElementById('otp-section').classList.remove('hidden');
+                } else {
+                    showToast(data.message || data.error || "Signup error. Please check your data.");
+                }
+            } catch (err) {
+                showToast("Connection error!");
+            }
+        }
+
+        async function handleVerifyOtp() {
+            const otp = document.getElementById('otp-input').value;
+            const formData = new FormData();
+            formData.append('email', signupSessionEmail);
+            formData.append('otp', otp);
+
+            try {
+                const res = await fetch(`${API_BASE}/authentication/signup/verify/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (res.ok && data.status) {
+                    showToast("Email verified successfully! Saving tokens.");
+                    localStorage.setItem('access_token', data.access);
+                    localStorage.setItem('refresh_token', data.refresh);
+                    
+                    const userData = {
+                        user_id: data.user_id,
+                        user_type: data.user_type,
+                        email: signupSessionEmail
+                    };
+                    localStorage.setItem('user_data', JSON.stringify(userData));
+                    
+                    appUser = userData;
+                    setupInterfaceLoggedIn();
+                } else {
+                    showToast(data.message || "Invalid OTP code.");
+                }
+            } catch (err) {
+                showToast("Verification failed!");
+            }
+        }
+
+        async function resendOtp() {
+            if (!signupSessionEmail) return;
+            const formData = new FormData();
+            formData.append('email', signupSessionEmail);
+            try {
+                const res = await fetch(`${API_BASE}/authentication/signup/resend-otp/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (res.ok) {
+                    showToast("OTP resent successfully!");
+                } else {
+                    showToast("Failed to resend code.");
+                }
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // LOGIN & LOGOUT FLOW
+        // -------------------------------------------------------------
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const pass = document.getElementById('login-password').value;
+
+            const formData = new FormData();
+            formData.append('email', email);
+            formData.append('password', pass);
+
+            try {
+                const res = await fetch(`${API_BASE}/authentication/auth/login/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (res.ok && data.status) {
+                    if (data.requires_2fa) {
+                        signupSessionEmail = email;
+                        showToast("2FA required! Check email for OTP.");
+                        document.getElementById('login-form').classList.add('hidden');
+                        document.getElementById('otp-section').classList.remove('hidden');
+                        return;
+                    }
+                    showToast("Login successful!");
+                    localStorage.setItem('access_token', data.access);
+                    localStorage.setItem('refresh_token', data.refresh);
+                    
+                    const userData = {
+                        user_id: data.user_id,
+                        user_type: data.user_type,
+                        email: email
+                    };
+                    localStorage.setItem('user_data', JSON.stringify(userData));
+                    
+                    appUser = userData;
+                    setupInterfaceLoggedIn();
+                } else {
+                    showToast(data.error || "Invalid email or password.");
+                }
+            } catch (err) {
+                showToast("Login failed!");
+            }
+        }
+
+        async function triggerLogout() {
+            const refresh = localStorage.getItem('refresh_token');
+            const token = localStorage.getItem('access_token');
+            if (refresh && token) {
+                const formData = new FormData();
+                formData.append('refresh', refresh);
+                try {
+                    await fetch(`${API_BASE}/authentication/auth/logout/`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData
+                    });
+                } catch (err) {}
+            }
+            localStorage.clear();
+            appUser = null;
+            setupInterfaceLoggedOut();
+            showToast("Logged out successfully.");
+        }
+
+        // -------------------------------------------------------------
+        // POST FEED LOGIC (GET, FILTER, LIKE, COMMENT, SHARE)
+        // -------------------------------------------------------------
+        async function loadFeed() {
+            const container = document.getElementById('posts-container');
+            container.innerHTML = `
+                <div class="text-center py-12">
+                    <span class="text-3xl text-indigo-400"><i class="fa-solid fa-spinner animate-spin"></i></span>
+                    <p class="text-sm text-slate-400 mt-2">Loading emergency feed...</p>
+                </div>
+            `;
+            
+            try {
+                const res = await fetch(`${API_BASE}/posts/feed/`);
+                const data = await res.json();
+                if (res.ok && data.status) {
+                    let items = data.feed || [];
+                    if (feedFilter !== 'all') {
+                        items = items.filter(item => item.post_type === feedFilter);
+                    }
+                    renderFeedItems(items);
+                } else {
+                    container.innerHTML = '<p class="text-center text-slate-400 py-8">Failed to load feed posts.</p>';
+                }
+            } catch (err) {
+                container.innerHTML = '<p class="text-center text-rose-400 py-8">Error connecting to feed.</p>';
+            }
+        }
+
+        function filterFeed(category) {
+            feedFilter = category;
+            document.querySelectorAll('.feed-filter-btn').forEach(btn => {
+                btn.className = "feed-filter-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700";
+            });
+            event.target.className = "feed-filter-btn px-4 py-2 bg-indigo-600 rounded-lg text-xs font-bold text-white";
+            loadFeed();
+        }
+
+        function renderFeedItems(items) {
+            const container = document.getElementById('posts-container');
+            if (items.length === 0) {
+                container.innerHTML = '<p class="text-center text-slate-400 py-12">No posts available in this category.</p>';
+                return;
+            }
+            container.innerHTML = '';
+            items.forEach(item => {
+                const details = item.details;
+                let postContent = '';
+                let postTitle = '';
+                let typeBadge = '';
+                let typeColor = 'bg-indigo-650/40 text-indigo-300 border border-indigo-700/50';
+
+                if (item.post_type === 'blood_need') {
+                    typeBadge = 'Blood Needed';
+                    typeColor = 'bg-rose-950/40 text-rose-300 border border-rose-800/50';
+                    postTitle = `Urgent: ${details.blood_group} Blood Required`;
+                    postContent = `
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 mt-2 text-sm bg-black/20 p-3 rounded-xl">
+                            <div><span class="text-slate-400">Patient:</span> ${details.patient_name} (${details.patient_age}y, ${details.patient_gender})</div>
+                            <div><span class="text-slate-400">Bags:</span> ${details.bags_needed} bags</div>
+                            <div><span class="text-slate-400">Hospital:</span> ${details.hospital_name}</div>
+                            <div><span class="text-slate-400">Needed On:</span> ${details.needed_date} @ ${details.needed_time}</div>
+                            <div class="col-span-2"><span class="text-slate-400">Address:</span> ${details.hospital_address || 'N/A'}</div>
+                        </div>
+                        <p class="text-zinc-300 text-sm mt-3">${details.description || ''}</p>
+                    `;
+                } else if (item.post_type === 'blood_donation') {
+                    typeBadge = 'Donation Record';
+                    typeColor = 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/50';
+                    postTitle = `Blood Donation Shared`;
+                    postContent = `
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 mt-2 text-sm bg-black/20 p-3 rounded-xl">
+                            <div><span class="text-slate-400">Donor:</span> ${item.user_email}</div>
+                            <div><span class="text-slate-400">Bags Donated:</span> ${details.bags_donated} bags</div>
+                            <div><span class="text-slate-400">Medical Facility:</span> ${details.medical_facility}</div>
+                            <div><span class="text-slate-400">Date:</span> ${details.donation_date} @ ${details.donation_time}</div>
+                        </div>
+                        <p class="text-zinc-300 text-sm mt-3">${details.patient_description || ''}</p>
+                    `;
+                } else if (item.post_type === 'medicine_need') {
+                    typeBadge = 'Medicine Need';
+                    typeColor = 'bg-amber-950/40 text-amber-300 border border-amber-800/50';
+                    postTitle = `Medicine Required: ${details.medicine_name}`;
+                    postContent = `
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 mt-2 text-sm bg-black/20 p-3 rounded-xl">
+                            <div><span class="text-slate-400">Medicine:</span> ${details.medicine_name}</div>
+                            <div><span class="text-slate-400">Qty:</span> ${details.quantity}</div>
+                            <div class="col-span-2"><span class="text-slate-400">Delivery Address:</span> ${details.address || 'N/A'}</div>
+                        </div>
+                        <p class="text-zinc-300 text-sm mt-3">${details.description || ''}</p>
+                    `;
+                } else if (item.post_type === 'equipment_need') {
+                    typeBadge = 'Equipment Need';
+                    typeColor = 'bg-purple-950/40 text-purple-300 border border-purple-800/50';
+                    postTitle = `Medical Equipment Needed: ${details.equipment_name}`;
+                    postContent = `
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 mt-2 text-sm bg-black/20 p-3 rounded-xl">
+                            <div><span class="text-slate-400">Condition Preferred:</span> ${details.condition}</div>
+                            <div><span class="text-slate-400">Quantity:</span> ${details.quantity}</div>
+                            <div class="col-span-2"><span class="text-slate-400">Delivery Address:</span> ${details.address || 'N/A'}</div>
+                        </div>
+                        <p class="text-zinc-300 text-sm mt-3">${details.description || ''}</p>
+                    `;
+                } else if (item.post_type === 'ambulance_need') {
+                    typeBadge = 'Ambulance Need';
+                    typeColor = 'bg-cyan-950/40 text-cyan-300 border border-cyan-800/50';
+                    postTitle = `Emergency Ambulance Needed (${details.ambulance_type})`;
+                    postContent = `
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 mt-2 text-sm bg-black/20 p-3 rounded-xl">
+                            <div><span class="text-slate-400">Ambulance Type:</span> ${details.ambulance_type}</div>
+                            <div><span class="text-slate-400">Pickup Date/Time:</span> ${details.needed_date} @ ${details.needed_time}</div>
+                            <div class="col-span-2"><span class="text-slate-400">Pickup Address:</span> ${details.address || 'N/A'}</div>
+                        </div>
+                        <p class="text-zinc-300 text-sm mt-3">${details.description || ''}</p>
+                    `;
+                } else {
+                    typeBadge = 'General Post';
+                    postTitle = details.title || 'General Update';
+                    postContent = `
+                        <p class="text-zinc-300 text-sm mt-2">${details.content || ''}</p>
+                    `;
+                }
+
+                const likeBtnClass = item.user_has_liked ? "text-indigo-400" : "text-slate-400 hover:text-indigo-400";
+                const locationLabel = `${item.upozila_name || ''}, ${item.district_name || ''}`;
+
+                const cardHtml = `
+                    <div class="glass-card rounded-2xl p-6 shadow-lg flex flex-col gap-4">
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center font-bold text-xs">
+                                    ${item.user_email[0].toUpperCase()}
+                                </div>
+                                <div>
+                                    <p class="text-xs font-bold text-slate-300">${item.user_email}</p>
+                                    <span class="text-[10px] text-slate-500">${new Date(item.created).toLocaleString()}</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end gap-1">
+                                <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${typeColor}">${typeBadge}</span>
+                                <span class="text-[10px] text-slate-400"><i class="fa-solid fa-map-pin mr-1"></i>${locationLabel}</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-base font-bold text-white">${postTitle}</h4>
+                            ${postContent}
+                        </div>
+
+                        <!-- Footer Interactions -->
+                        <div class="flex items-center gap-6 border-t border-white/5 pt-4 text-xs">
+                            <button onclick="likePost('${item.post_type}', ${item.id})" class="flex items-center gap-1.5 ${likeBtnClass} font-semibold transition-all">
+                                <i class="fa-solid fa-thumbs-up text-sm"></i>
+                                <span>Like (${item.likes_count})</span>
+                            </button>
+                            <button onclick="toggleCommentsSection('${item.post_type}', ${item.id})" class="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 font-semibold transition-all">
+                                <i class="fa-solid fa-comment text-sm"></i>
+                                <span>Comments (${item.comments_count})</span>
+                            </button>
+                            <button onclick="sharePost('${item.post_type}', ${item.id})" class="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 font-semibold transition-all">
+                                <i class="fa-solid fa-share-nodes text-sm"></i>
+                                <span>Share (${item.shares_count})</span>
+                            </button>
+                        </div>
+
+                        <!-- Comments section container (initially hidden) -->
+                        <div id="comments-section-${item.post_type}-${item.id}" class="hidden space-y-3 pt-3 border-t border-white/5">
+                            <div class="flex gap-2">
+                                <input type="text" id="comment-input-${item.post_type}-${item.id}" placeholder="Write a comment..." class="flex-grow bg-slate-900/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+                                <button onclick="submitComment('${item.post_type}', ${item.id})" class="btn-primary py-2 px-4 rounded-lg font-bold text-xs">Send</button>
+                            </div>
+                            <div id="comments-list-${item.post_type}-${item.id}" class="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
+                                <!-- Loaded dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHtml);
+            });
+        }
+
+        // Like Toggle action
+        async function likePost(postType, postId) {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                showToast("Please log in to like posts.");
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/posts/interactions/like/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ post_type: postType, post_id: postId })
+                });
+                if (res.ok) {
+                    loadFeed();
+                }
+            } catch (err) {}
+        }
+
+        // Comments Toggle action
+        async function toggleCommentsSection(postType, postId) {
+            const panel = document.getElementById(`comments-section-${postType}-${postId}`);
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                loadComments(postType, postId);
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        async function loadComments(postType, postId) {
+            const container = document.getElementById(`comments-list-${postType}-${postId}`);
+            container.innerHTML = '<p class="text-[10px] text-slate-500 text-center py-2">Loading comments...</p>';
+            try {
+                const res = await fetch(`${API_BASE}/posts/interactions/comments/?post_type=${postType}&post_id=${postId}`);
+                const data = await res.json();
+                if (res.ok && data.status) {
+                    const comments = data.comments || [];
+                    if (comments.length === 0) {
+                        container.innerHTML = '<p class="text-[10px] text-slate-500 py-2">No comments yet. Be the first!</p>';
+                        return;
+                    }
+                    container.innerHTML = '';
+                    comments.forEach(c => {
+                        container.insertAdjacentHTML('beforeend', `
+                            <div class="bg-black/10 p-2 rounded-lg text-xs">
+                                <div class="flex items-center justify-between text-[10px] text-slate-400 font-bold mb-1">
+                                    <span>${c.user_email}</span>
+                                    <span>${new Date(c.created_at).toLocaleDateString()}</span>
+                                </div>
+                                <p class="text-zinc-200">${c.content}</p>
+                            </div>
+                        `);
+                    });
+                }
+            } catch (err) {}
+        }
+
+        async function submitComment(postType, postId) {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                showToast("Please log in to add comments.");
+                return;
+            }
+            const input = document.getElementById(`comment-input-${postType}-${postId}`);
+            const content = input.value.trim();
+            if (!content) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/posts/interactions/comment/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ post_type: postType, post_id: postId, content: content })
+                });
+                if (res.ok) {
+                    input.value = '';
+                    loadComments(postType, postId);
+                    showToast("Comment posted!");
+                }
+            } catch (err) {}
+        }
+
+        // Share post action
+        async function sharePost(postType, postId) {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                showToast("Please log in to share posts.");
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/posts/interactions/share/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ post_type: postType, post_id: postId })
+                });
+                if (res.ok) {
+                    const postLink = `${window.location.origin}/dashboard/?type=${postType}&id=${postId}`;
+                    navigator.clipboard.writeText(postLink);
+                    showToast("Post link copied to clipboard & logged as shared!");
+                    loadFeed();
+                }
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // CREATE POST DIALOG
+        // -------------------------------------------------------------
+        async function openCreatePostModal() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                showToast("Please log in to publish needs.");
+                return;
+            }
+            document.getElementById('create-post-modal').classList.remove('hidden');
+            renderPostForm('general');
+            
+            // Load divisions for post modal locations
+            try {
+                const res = await fetch(`${API_BASE}/location/divisions/`);
+                const data = await res.json();
+                const divSelect = document.getElementById('post-division');
+                divSelect.innerHTML = '<option value="">Select Division</option>';
+                data.forEach(div => {
+                    divSelect.insertAdjacentHTML('beforeend', `<option value="${div.id}">${div.division_name_eng}</option>`);
+                });
+            } catch (err) {}
+        }
+
+        function closeCreatePostModal() {
+            document.getElementById('create-post-modal').classList.add('hidden');
+        }
+
+        function renderPostForm(type) {
+            const container = document.getElementById('post-form-fields');
+            if (type === 'general') {
+                container.innerHTML = `
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Post Title</label>
+                        <input type="text" id="post-title" required placeholder="General Title" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Post Content</label>
+                        <textarea id="post-content" required placeholder="Write details here..." rows="4" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+                    </div>
+                `;
+            } else if (type === 'blood_need') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Patient Full Name</label>
+                            <input type="text" id="post-patient-name" required placeholder="Full Name" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Blood Group Required</label>
+                            <select id="post-blood-group" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                                <option value="A+">A+</option><option value="A-">A-</option>
+                                <option value="B+">B+</option><option value="B-">B-</option>
+                                <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                                <option value="O+">O+</option><option value="O-">O-</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Age</label>
+                            <input type="number" id="post-patient-age" required placeholder="30" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Gender</label>
+                            <select id="post-patient-gender" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                                <option value="male">Male</option><option value="female">Female</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Bags Needed</label>
+                            <input type="number" id="post-bags" required placeholder="1" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Hospital Name</label>
+                            <input type="text" id="post-hospital-name" required placeholder="Square Hospital" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Contact Number</label>
+                            <input type="text" id="post-contact" required placeholder="017xxxxxxxx" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Needed Date</label>
+                            <input type="date" id="post-needed-date" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Needed Time</label>
+                            <input type="time" id="post-needed-time" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Detailed Description / Instructions</label>
+                        <textarea id="post-description" placeholder="Write any instructions..." rows="2" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+                    </div>
+                `;
+            } else if (type === 'medicine_need') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Medicine Name</label>
+                            <input type="text" id="post-med-name" required placeholder="Napa Extend" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Quantity</label>
+                            <input type="text" id="post-med-qty" required placeholder="2 boxes" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Delivery Address</label>
+                            <input type="text" id="post-med-address" required placeholder="123 Street..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Contact Phone</label>
+                            <input type="text" id="post-med-contact" required placeholder="017xxxxxxxx" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Brief Description</label>
+                        <textarea id="post-med-description" placeholder="Urgency details..." rows="2" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+                    </div>
+                `;
+            } else if (type === 'equipment_need') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Equipment Name</label>
+                            <input type="text" id="post-eq-name" required placeholder="Oxygen Cylinder" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Quantity</label>
+                            <input type="number" id="post-eq-qty" required placeholder="1" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Delivery Address</label>
+                            <input type="text" id="post-eq-address" required placeholder="123 Street..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Condition Preferred</label>
+                            <select id="post-eq-condition" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                                <option value="new">New</option><option value="good">Good</option>
+                                <option value="fair">Fair</option><option value="poor">Poor</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Contact Phone</label>
+                            <input type="text" id="post-eq-contact" required placeholder="017xxxxxxxx" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Urgency</label>
+                            <select id="post-eq-urgency" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                                <option value="low">Low</option><option value="medium">Medium</option>
+                                <option value="high">High</option><option value="critical">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Brief Description</label>
+                        <textarea id="post-eq-description" placeholder="Add specifications..." rows="2" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+                    </div>
+                `;
+            } else if (type === 'ambulance_need') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Ambulance Type</label>
+                            <select id="post-amb-type" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                                <option value="basic">Basic Life Support</option>
+                                <option value="advanced">Advanced Life Support</option>
+                                <option value="icu">ICU Ambulance</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Contact Phone</label>
+                            <input type="text" id="post-amb-contact" required placeholder="017xxxxxxxx" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Pickup Date</label>
+                            <input type="date" id="post-amb-date" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">Pickup Time</label>
+                            <input type="time" id="post-amb-time" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Pickup Address</label>
+                        <input type="text" id="post-amb-address" required placeholder="123 Street..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Brief Description</label>
+                        <textarea id="post-amb-description" placeholder="Any special needs (oxygen, ventilator)..." rows="2" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+                    </div>
+                `;
+            }
+        }
+
+        async function submitPost(e) {
+            e.preventDefault();
+            const token = localStorage.getItem('access_token');
+            if (!token) return;
+
+            const type = document.getElementById('post-type').value;
+            let payload = {
+                division: document.getElementById('post-division').value,
+                district: document.getElementById('post-district').value,
+                upozila: document.getElementById('post-upazila').value,
+            };
+
+            let endpoint = `${API_BASE}/posts/general/`;
+            if (type === 'general') {
+                payload.title = document.getElementById('post-title').value;
+                payload.content = document.getElementById('post-content').value;
+            } else if (type === 'blood_need') {
+                endpoint = `${API_BASE}/posts/blood-need/`;
+                payload.patient_name = document.getElementById('post-patient-name').value;
+                payload.patient_age = document.getElementById('post-patient-age').value;
+                payload.patient_gender = document.getElementById('post-patient-gender').value;
+                payload.blood_group = document.getElementById('post-blood-group').value;
+                payload.bags_needed = document.getElementById('post-bags').value;
+                payload.hospital_name = document.getElementById('post-hospital-name').value;
+                payload.contact_number = document.getElementById('post-contact').value;
+                payload.needed_date = document.getElementById('post-needed-date').value;
+                payload.needed_time = document.getElementById('post-needed-time').value;
+                payload.description = document.getElementById('post-description').value;
+            } else if (type === 'medicine_need') {
+                endpoint = `${API_BASE}/posts/medicine-need/`;
+                payload.medicine_name = document.getElementById('post-med-name').value;
+                payload.quantity = document.getElementById('post-med-qty').value;
+                payload.address = document.getElementById('post-med-address').value;
+                payload.contact_number = document.getElementById('post-med-contact').value;
+                payload.description = document.getElementById('post-med-description').value;
+            } else if (type === 'equipment_need') {
+                endpoint = `${API_BASE}/posts/equipment-need/`;
+                payload.equipment_name = document.getElementById('post-eq-name').value;
+                payload.quantity = document.getElementById('post-eq-qty').value;
+                payload.address = document.getElementById('post-eq-address').value;
+                payload.condition = document.getElementById('post-eq-condition').value;
+                payload.contact_number = document.getElementById('post-eq-contact').value;
+                payload.urgency = document.getElementById('post-eq-urgency').value;
+                payload.description = document.getElementById('post-eq-description').value;
+            } else if (type === 'ambulance_need') {
+                endpoint = `${API_BASE}/posts/ambulance-need/`;
+                payload.ambulance_type = document.getElementById('post-amb-type').value;
+                payload.contact_number = document.getElementById('post-amb-contact').value;
+                payload.needed_date = document.getElementById('post-amb-date').value;
+                payload.needed_time = document.getElementById('post-amb-time').value;
+                payload.address = document.getElementById('post-amb-address').value;
+                payload.description = document.getElementById('post-amb-description').value;
+            }
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    showToast("Need post published successfully!");
+                    closeCreatePostModal();
+                    loadFeed();
+                } else {
+                    const err = await res.json();
+                    showToast(err.message || "Failed to publish post.");
+                }
+            } catch (err) {
+                showToast("Post creation failed!");
+            }
+        }
+
+        // -------------------------------------------------------------
+        // BLOGS LOGIC (GET, LIKE, COMMENT)
+        // -------------------------------------------------------------
+        async function loadBlogs() {
+            const container = document.getElementById('blogs-container');
+            container.innerHTML = '<div class="text-center py-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-indigo-400"></i></div>';
+            try {
+                const res = await fetch(`${API_BASE}/blogs/posts/`);
+                const data = await res.json();
+                if (res.ok && data.status) {
+                    const blogs = data.blogs || [];
+                    if (blogs.length === 0) {
+                        container.innerHTML = '<p class="text-center text-slate-400 py-8 col-span-2">No health articles published yet.</p>';
+                        return;
+                    }
+                    container.innerHTML = '';
+                    blogs.forEach(blog => {
+                        container.insertAdjacentHTML('beforeend', `
+                            <div class="glass-card rounded-2xl p-6 shadow-md flex flex-col justify-between gap-4">
+                                <div>
+                                    <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-400 border border-indigo-700/50">${blog.category}</span>
+                                    <h4 class="text-lg font-bold text-white mt-2">${blog.title}</h4>
+                                    <p class="text-xs text-indigo-300 mb-4">By Dr. ${blog.doctor_name || 'Anonymous'}</p>
+                                    <p class="text-zinc-300 text-sm line-clamp-3">${blog.content}</p>
+                                </div>
+                                <div class="flex items-center gap-6 border-t border-white/5 pt-4 text-xs text-slate-400">
+                                    <span><i class="fa-solid fa-eye mr-1"></i>${blog.views}</span>
+                                    <span><i class="fa-solid fa-thumbs-up mr-1 text-indigo-400"></i>${blog.like_count}</span>
+                                    <span><i class="fa-solid fa-comment mr-1"></i>${blog.comment_count}</span>
+                                </div>
+                            </div>
+                        `);
+                    });
+                }
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // DYNAMIC ROLE-SPECIFIC DASHBOARD
+        // -------------------------------------------------------------
+        async function loadDashboardSpecifics() {
+            const dock = document.getElementById('dashboard-tab');
+            dock.innerHTML = '<div class="text-center py-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-indigo-400"></i></div>';
+            
+            const role = appUser.user_type;
+            const token = localStorage.getItem('access_token');
+
+            if (role === 'admin') {
+                // Admin dashboard statistics
+                try {
+                    const res = await fetch(`${API_BASE}/admin/dashboard-stats/`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const resData = await res.json();
+                    if (res.ok && resData.status) {
+                        const stats = resData.stats;
+                        dock.innerHTML = `
+                            <div class="space-y-6">
+                                <div>
+                                    <h2 class="text-2xl font-bold tracking-tight">System Statistics</h2>
+                                    <p class="text-xs text-slate-400">Admin aggregates platform metrics</p>
+                                </div>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div class="glass-card rounded-2xl p-6">
+                                        <p class="text-xs text-slate-400 font-semibold uppercase">Total Users</p>
+                                        <p class="text-3xl font-extrabold text-white mt-2">${stats.users.total}</p>
+                                    </div>
+                                    <div class="glass-card rounded-2xl p-6">
+                                        <p class="text-xs text-slate-400 font-semibold uppercase">Doctors Registered</p>
+                                        <p class="text-3xl font-extrabold text-white mt-2">${stats.users.doctors}</p>
+                                    </div>
+                                    <div class="glass-card rounded-2xl p-6">
+                                        <p class="text-xs text-slate-400 font-semibold uppercase">Total Feed Posts</p>
+                                        <p class="text-3xl font-extrabold text-white mt-2">${stats.posts.total}</p>
+                                    </div>
+                                    <div class="glass-card rounded-2xl p-6">
+                                        <p class="text-xs text-slate-400 font-semibold uppercase">Total Bookings</p>
+                                        <p class="text-3xl font-extrabold text-white mt-2">${stats.bookings.total}</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                                    <div class="glass-panel p-6 rounded-2xl">
+                                        <h3 class="font-bold text-lg mb-4">User Type breakdown</h3>
+                                        <div class="space-y-2">
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>Patients:</span> <span class="font-bold">${stats.users.regular}</span></div>
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>Doctors:</span> <span class="font-bold">${stats.users.doctors}</span></div>
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>Blood Donors:</span> <span class="font-bold">${stats.users.blood_donors}</span></div>
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>Ambulances:</span> <span class="font-bold">${stats.users.ambulances}</span></div>
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>Pharmacies:</span> <span class="font-bold">${stats.users.pharmacies}</span></div>
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>Diagnostics:</span> <span class="font-bold">${stats.users.diagnostics}</span></div>
+                                        </div>
+                                    </div>
+                                    <div class="glass-panel p-6 rounded-2xl">
+                                        <h3 class="font-bold text-lg mb-4">Post Type breakdown</h3>
+                                        <div class="space-y-2">
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>Blood Needs:</span> <span class="font-bold">${stats.posts.blood_need}</span></div>
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>Medicine Needs:</span> <span class="font-bold">${stats.posts.medicine_need}</span></div>
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>Equipment Needs:</span> <span class="font-bold">${stats.posts.equipment_need}</span></div>
+                                            <div class="flex justify-between text-sm py-1 border-b border-white/5"><span>General Posts:</span> <span class="font-bold">${stats.posts.general}</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } catch (err) {}
+            } else if (role === 'doctor') {
+                // Doctor scheduling planner, slot confirmations, appointments list, blog posts
+                dock.innerHTML = `
+                    <div class="space-y-6">
+                        <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                            <div>
+                                <h2 class="text-2xl font-bold tracking-tight">Doctor Control Center</h2>
+                                <p class="text-xs text-slate-400">Manage schedules, confirm date slots, and view patient appointments</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <!-- Scheduling Slot Configurator -->
+                            <div class="glass-panel p-6 rounded-2xl shadow-xl">
+                                <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-clock-rotate-left mr-2 text-indigo-400"></i>Weekly Schedule Rules</h3>
+                                <form onsubmit="doctorAddSchedule(event)" class="space-y-4 mb-6 bg-black/10 p-4 rounded-xl">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-semibold mb-1">Weekday</label>
+                                            <select id="sched-day" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+                                                <option value="saturday">Saturday</option>
+                                                <option value="sunday">Sunday</option>
+                                                <option value="monday">Monday</option>
+                                                <option value="tuesday">Tuesday</option>
+                                                <option value="wednesday">Wednesday</option>
+                                                <option value="thursday">Thursday</option>
+                                                <option value="friday">Friday</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-semibold mb-1">Max Capacity</label>
+                                            <input type="number" id="sched-max" required value="30" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-semibold mb-1">Start Time</label>
+                                            <input type="time" id="sched-start" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-semibold mb-1">End Time</label>
+                                            <input type="time" id="sched-end" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="w-full btn-primary py-2 rounded-lg font-bold text-xs">Add Weekly Slot</button>
+                                </form>
+                                <div id="doctor-sched-list" class="space-y-2">
+                                    <!-- Schedules list dynamically loaded -->
+                                </div>
+                            </div>
+
+                            <!-- Calendar Date Slot Confirmation Check -->
+                            <div class="glass-panel p-6 rounded-2xl shadow-xl">
+                                <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-calendar-check mr-2 text-indigo-400"></i>Approve Dates for Bookings</h3>
+                                <p class="text-xs text-slate-400 mb-4">Toggle permission to open a slot for patient bookings on specific calendar dates</p>
+                                <div id="doctor-date-slots-list" class="space-y-2 max-h-[350px] overflow-y-auto custom-scrollbar">
+                                    <!-- Dynamic approval date checklist loaded -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bookings list -->
+                        <div class="glass-panel p-6 rounded-2xl mt-8">
+                            <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-users-medical mr-2 text-indigo-400"></i>Patient Bookings</h3>
+                            <div id="doctor-bookings-list" class="space-y-3">
+                                <!-- Loaded dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                loadDoctorSchedules();
+                loadDoctorDateSlots();
+                loadDoctorBookings();
+            } else if (role === 'blood_donor') {
+                // Blood donor availability toggle, lives saved counter, log donation record
+                try {
+                    const res = await fetch(`${API_BASE}/profiles/blood-donors/me/`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const donorData = await res.json();
+                    if (res.ok && donorData.status) {
+                        const donor = donorData.donor;
+                        
+                        // Availability UI elements
+                        const availLabel = donor.availability === 'available' ? 'Available' : 'Unavailable';
+                        const availColor = donor.availability === 'available' ? 'text-emerald-400 bg-emerald-950 border-emerald-800' : 'text-slate-400 bg-slate-800 border-slate-700';
+
+                        dock.innerHTML = `
+                            <div class="space-y-6">
+                                <div class="border-b border-white/5 pb-4">
+                                    <h2 class="text-2xl font-bold tracking-tight">Donor Dashboard</h2>
+                                    <p class="text-xs text-slate-400">Track donation stats and update status</p>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div class="glass-card rounded-2xl p-6 text-center">
+                                        <p class="text-xs text-slate-400 font-bold uppercase">Blood Group</p>
+                                        <p class="text-5xl font-extrabold text-rose-500 mt-2">${donor.blood_group}</p>
+                                    </div>
+                                    <div class="glass-card rounded-2xl p-6 text-center">
+                                        <p class="text-xs text-slate-400 font-bold uppercase">Lives Saved Counter</p>
+                                        <p class="text-5xl font-extrabold text-emerald-400 mt-2">${donor.lives_saved_count}</p>
+                                        <p class="text-[10px] text-slate-500 mt-2">Increments automatically per logged donation</p>
+                                    </div>
+                                    <div class="glass-card rounded-2xl p-6 flex flex-col justify-between items-center">
+                                        <div>
+                                            <p class="text-xs text-slate-400 font-bold uppercase text-center">Availability Status</p>
+                                            <span class="inline-block mt-3 text-sm font-semibold rounded-full px-4 py-1.5 border ${availColor}">${availLabel}</span>
+                                        </div>
+                                        <button onclick="toggleDonorAvailability('${donor.availability === 'available' ? 'unavailable' : 'available'}')" class="w-full btn-primary py-2 rounded-xl text-xs font-bold mt-4">Toggle Availability</button>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+                                    <!-- Record new donation -->
+                                    <div class="glass-panel p-6 rounded-2xl">
+                                        <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-hand-holding-heart mr-2 text-rose-500"></i>Log New Donation</h3>
+                                        <form onsubmit="submitDonationRecord(event)" class="space-y-4">
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Donation Date</label>
+                                                    <input type="date" id="don-date" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Donation Time</label>
+                                                    <input type="time" id="don-time" required class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-semibold mb-1">Medical Facility / Hospital Name</label>
+                                                <input type="text" id="don-facility" required placeholder="Square Hospital, Dhaka" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-semibold mb-1">Short Explanation / Patient Details</label>
+                                                <textarea id="don-desc" required placeholder="Donated blood to a thalassemia child..." rows="3" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"></textarea>
+                                            </div>
+                                            <button type="submit" class="w-full btn-primary py-3 rounded-xl font-bold">Save Donation Record</button>
+                                        </form>
+                                    </div>
+
+                                    <!-- Past donations log -->
+                                    <div class="glass-panel p-6 rounded-2xl">
+                                        <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-clock-rotate-left mr-2 text-indigo-400"></i>Donation Log Book</h3>
+                                        <div class="space-y-3 max-h-[350px] overflow-y-auto custom-scrollbar">
+                                            ${donor.donation_posts.length === 0 ? '<p class="text-sm text-slate-500 text-center py-8">No donation records added yet.</p>' : ''}
+                                            ${donor.donation_posts.map(p => `
+                                                <div class="bg-black/20 p-3 rounded-xl text-xs space-y-2 border border-white/5">
+                                                    <div class="flex justify-between items-center text-[10px] text-slate-400">
+                                                        <span>${p.donation_date} @ ${p.donation_time}</span>
+                                                        <span class="text-rose-400 font-bold">${p.bags_donated} Bag(s)</span>
+                                                    </div>
+                                                    <p class="font-bold text-white">${p.medical_facility}</p>
+                                                    <p class="text-zinc-300 text-[11px]">${p.patient_description}</p>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } catch (err) {}
+            } else if (role === 'ambulance') {
+                // Ambulance status toggle
+                try {
+                    const res = await fetch(`${API_BASE}/profiles/ambulances/me/`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const ambData = await res.json();
+                    if (res.ok && ambData.status) {
+                        const amb = ambData.ambulance;
+                        const statLabel = amb.is_available ? 'Active (Ready for Service)' : 'Inactive';
+                        const statColor = amb.is_available ? 'text-emerald-400 bg-emerald-950 border-emerald-800' : 'text-rose-400 bg-rose-950 border-rose-800';
+
+                        dock.innerHTML = `
+                            <div class="space-y-6 max-w-xl mx-auto">
+                                <div class="border-b border-white/5 pb-4 text-center">
+                                    <h2 class="text-2xl font-bold tracking-tight">Ambulance Service Provider Dashboard</h2>
+                                    <p class="text-xs text-slate-400 mt-1">Update service status so users can search for you</p>
+                                </div>
+                                <div class="glass-panel rounded-2xl p-8 flex flex-col items-center gap-6 shadow-2xl">
+                                    <div class="w-20 h-20 rounded-full bg-indigo-600/20 border border-indigo-500/50 flex items-center justify-center text-4xl text-indigo-400">
+                                        <i class="fa-solid fa-truck-medical"></i>
+                                    </div>
+                                    <div class="text-center">
+                                        <h3 class="text-xl font-bold text-white">${amb.owner_name}</h3>
+                                        <p class="text-xs text-slate-400 mt-1">Vehicle: ${amb.vehicle_number} (${amb.ambulance_type.toUpperCase()})</p>
+                                    </div>
+                                    
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-xs text-slate-400 uppercase font-semibold">Service Status:</span>
+                                        <span class="text-xs font-bold px-3 py-1 rounded-full border ${statColor}">${statLabel}</span>
+                                    </div>
+
+                                    <button onclick="toggleAmbulanceService(${!amb.is_available})" class="w-full btn-primary py-3 rounded-xl font-bold">
+                                        ${amb.is_available ? 'Go Offline' : 'Go Online / Active'}
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } catch (err) {}
+            } else if (role === 'pharmacy') {
+                // Add medicine product to profile, toggle is_open
+                try {
+                    const res = await fetch(`${API_BASE}/profiles/pharmacies/me/`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const pharmData = await res.json();
+                    if (res.ok && pharmData.status) {
+                        const pharm = pharmData.pharmacy;
+                        
+                        dock.innerHTML = `
+                            <div class="space-y-6">
+                                <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                                    <div>
+                                        <h2 class="text-2xl font-bold tracking-tight">${pharm.pharmacy_name} Dashboard</h2>
+                                        <p class="text-xs text-slate-400">Manage medicine stock and catalog</p>
+                                    </div>
+                                    <button onclick="togglePharmacyOpen(${!pharm.is_open})" class="px-4 py-2 text-xs rounded-xl font-bold border ${pharm.is_open ? 'border-emerald-600 text-emerald-400 bg-emerald-950/20' : 'border-rose-600 text-rose-400 bg-rose-950/20'}">
+                                        ${pharm.is_open ? 'Open' : 'Closed'}
+                                    </button>
+                                </div>
+
+                                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <!-- Add medicine form -->
+                                    <div class="glass-panel p-6 rounded-2xl shadow-xl lg:col-span-1">
+                                        <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-plus-circle mr-2 text-indigo-400"></i>Add New Medicine</h3>
+                                        <form onsubmit="submitMedicine(event)" class="space-y-4">
+                                            <div>
+                                                <label class="block text-sm font-semibold mb-1">Medicine Name</label>
+                                                <input type="text" id="med-name" required placeholder="Napa 500mg" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Generic Name</label>
+                                                    <input type="text" id="med-generic" placeholder="Paracetamol" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Category</label>
+                                                    <input type="text" id="med-cat" placeholder="Tablet" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                                </div>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Price (BDT)</label>
+                                                    <input type="number" step="0.01" id="med-price" required placeholder="1.20" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Quantity</label>
+                                                    <input type="number" id="med-qty" required value="100" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-semibold mb-1">Description</label>
+                                                <textarea id="med-desc" placeholder="Write specifications..." rows="2" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"></textarea>
+                                            </div>
+                                            <button type="submit" class="w-full btn-primary py-3 rounded-xl font-bold">Add to Catalog</button>
+                                        </form>
+                                    </div>
+
+                                    <!-- Medicines inventory table -->
+                                    <div class="glass-panel p-6 rounded-2xl shadow-xl lg:col-span-2">
+                                        <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-list-check mr-2 text-indigo-400"></i>Medicine Catalog</h3>
+                                        <div id="pharmacy-med-catalog" class="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+                                            <!-- Dynamically loaded medicines -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        loadPharmacyMedicines(pharm.id);
+                    }
+                } catch (err) {}
+            } else if (role === 'diagnostic') {
+                // Add test catalogue, toggle is_open
+                try {
+                    const res = await fetch(`${API_BASE}/profiles/diagnostics/me/`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const diagData = await res.json();
+                    if (res.ok && diagData.status) {
+                        const diag = diagData.diagnostic;
+
+                        dock.innerHTML = `
+                            <div class="space-y-6">
+                                <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                                    <div>
+                                        <h2 class="text-2xl font-bold tracking-tight">${diag.diagnostic_name} Dashboard</h2>
+                                        <p class="text-xs text-slate-400">Manage diagnostic tests catalog and prices</p>
+                                    </div>
+                                    <button onclick="toggleDiagnosticOpen(${!diag.is_open})" class="px-4 py-2 text-xs rounded-xl font-bold border ${diag.is_open ? 'border-emerald-600 text-emerald-400 bg-emerald-950/20' : 'border-rose-600 text-rose-400 bg-rose-950/20'}">
+                                        ${diag.is_open ? 'Open' : 'Closed'}
+                                    </button>
+                                </div>
+
+                                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <!-- Add test form -->
+                                    <div class="glass-panel p-6 rounded-2xl shadow-xl lg:col-span-1">
+                                        <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-plus-circle mr-2 text-indigo-400"></i>Add Diagnostic Test</h3>
+                                        <form onsubmit="submitDiagnosticTest(event)" class="space-y-4">
+                                            <div>
+                                                <label class="block text-sm font-semibold mb-1">Test Name</label>
+                                                <input type="text" id="test-name" required placeholder="CBC (Complete Blood Count)" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Category</label>
+                                                    <input type="text" id="test-cat" placeholder="Hematology" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold mb-1">Price (BDT)</label>
+                                                    <input type="number" step="0.01" id="test-price" required placeholder="400.00" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-semibold mb-1">Test Criteria / Range</label>
+                                                <input type="text" id="test-criteria" placeholder="Hemoglobin, Platelets etc." class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-semibold mb-1">Prep Instructions</label>
+                                                <textarea id="test-prep" placeholder="Fast 8-12 hours prior..." rows="2" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"></textarea>
+                                            </div>
+                                            <button type="submit" class="w-full btn-primary py-3 rounded-xl font-bold">Add Test to list</button>
+                                        </form>
+                                    </div>
+
+                                    <!-- Test catalog table -->
+                                    <div class="glass-panel p-6 rounded-2xl shadow-xl lg:col-span-2">
+                                        <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-list-check mr-2 text-indigo-400"></i>Test catalogue</h3>
+                                        <div id="diagnostic-test-catalog" class="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+                                            <!-- Dynamically loaded tests -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        loadDiagnosticTests(diag.id);
+                    }
+                } catch (err) {}
+            } else {
+                // Regular user: Edit profile, Search and book doctors/donors/etc.
+                dock.innerHTML = `
+                    <div class="space-y-6">
+                        <div class="flex items-center justify-between border-b border-white/5 pb-4">
+                            <div>
+                                <h2 class="text-2xl font-bold tracking-tight">Patient Dashboard</h2>
+                                <p class="text-xs text-slate-400">Find doctors, donors, diagnostics, ambulances, and pharmacies</p>
+                            </div>
+                        </div>
+
+                        <!-- Interactive Search Panel -->
+                        <div class="glass-panel p-6 rounded-2xl shadow-xl space-y-6">
+                            <div class="flex flex-wrap gap-2 border-b border-white/5 pb-4" id="search-tabs">
+                                <button onclick="switchSearchCategory('doctor')" id="btn-search-doctor" class="search-tab-btn px-4 py-2 bg-indigo-600 rounded-lg text-xs font-bold text-white">Find Doctors</button>
+                                <button onclick="switchSearchCategory('blood_donor')" id="btn-search-donor" class="search-tab-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Blood Donors</button>
+                                <button onclick="switchSearchCategory('ambulance')" id="btn-search-ambulance" class="search-tab-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Ambulances</button>
+                                <button onclick="switchSearchCategory('pharmacy')" id="btn-search-pharmacy" class="search-tab-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Pharmacies</button>
+                                <button onclick="switchSearchCategory('diagnostic')" id="btn-search-diagnostic" class="search-tab-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700">Diagnostic Labs</button>
+                            </div>
+
+                            <!-- Search form input -->
+                            <div class="flex gap-4">
+                                <input type="text" id="search-query" oninput="runSearch()" placeholder="Search by name, specialities, details..." class="flex-grow bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none">
+                            </div>
+
+                            <!-- Search results lists -->
+                            <div id="search-results-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                                <!-- Results -->
+                            </div>
+                        </div>
+
+                        <!-- Bookings checklist -->
+                        <div class="glass-panel p-6 rounded-2xl">
+                            <h3 class="font-bold text-lg mb-4"><i class="fa-solid fa-notes-medical mr-2 text-indigo-400"></i>My Appointments List</h3>
+                            <div id="patient-bookings-list" class="space-y-3">
+                                <!-- Dynamic bookings loaded -->
+                            </div>
+                        </div>
+                    </div>
+                `;
+                switchSearchCategory('doctor');
+                loadPatientBookings();
+            }
+        }
+
+        // -------------------------------------------------------------
+        // REGULAR USER SEARCH ACTIONS
+        // -------------------------------------------------------------
+        let currentSearchCategory = 'doctor';
+        function switchSearchCategory(category) {
+            currentSearchCategory = category;
+            document.querySelectorAll('.search-tab-btn').forEach(btn => {
+                btn.className = "search-tab-btn px-4 py-2 bg-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-700";
+            });
+            document.getElementById(`btn-search-${category === 'blood_donor' ? 'donor' : category}`).className = "search-tab-btn px-4 py-2 bg-indigo-600 rounded-lg text-xs font-bold text-white";
+            runSearch();
+        }
+
+        async function runSearch() {
+            const query = document.getElementById('search-query').value;
+            const container = document.getElementById('search-results-list');
+            container.innerHTML = '<div class="col-span-2 text-center py-4"><i class="fa-solid fa-spinner animate-spin text-indigo-400 text-xl"></i></div>';
+            
+            let url = '';
+            if (currentSearchCategory === 'doctor') {
+                url = `${API_BASE}/profiles/doctors/?search=${query}`;
+            } else if (currentSearchCategory === 'blood_donor') {
+                url = `${API_BASE}/profiles/blood-donors/?search=${query}`;
+            } else if (currentSearchCategory === 'ambulance') {
+                url = `${API_BASE}/profiles/ambulances/?search=${query}`;
+            } else if (currentSearchCategory === 'pharmacy') {
+                url = `${API_BASE}/profiles/pharmacies/?search=${query}`;
+            } else if (currentSearchCategory === 'diagnostic') {
+                url = `${API_BASE}/profiles/diagnostics/?search=${query}`;
+            }
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                if (res.ok) {
+                    const items = data.results || data;
+                    renderSearchResults(items);
+                }
+            } catch (err) {}
+        }
+
+        function renderSearchResults(items) {
+            const container = document.getElementById('search-results-list');
+            if (!items || items.length === 0) {
+                container.innerHTML = '<p class="col-span-2 text-center text-slate-500 py-6 text-sm">No listings found matching criteria.</p>';
+                return;
+            }
+            container.innerHTML = '';
+            
+            items.forEach(item => {
+                let html = '';
+                if (currentSearchCategory === 'doctor') {
+                    const rating = item.evaluation ? item.evaluation.avg_rating : 0;
+                    const specName = item.specialization_detail ? item.specialization_detail.name_eng : 'Medical Specialist';
+                    html = `
+                        <div class="glass-card rounded-xl p-5 flex flex-col justify-between gap-3">
+                            <div>
+                                <h4 class="font-bold text-white">Dr. ${item.first_name} ${item.last_name}</h4>
+                                <p class="text-xs text-indigo-400 font-semibold mt-1">${specName} (${item.years_of_experience}y exp)</p>
+                                <p class="text-xs text-slate-400 mt-2"><i class="fa-solid fa-map-pin mr-1"></i>${item.district_name || 'Dhaka'}</p>
+                                <div class="flex items-center gap-1.5 text-amber-400 mt-2 text-xs">
+                                    <i class="fa-solid fa-star"></i>
+                                    <span class="font-bold">${rating}</span>
+                                </div>
+                            </div>
+                            <button onclick="openBookingModal(${item.id}, 'Dr. ${item.first_name} ${item.last_name}')" class="btn-primary w-full py-2 rounded-lg font-bold text-xs">Book Appointment</button>
+                        </div>
+                    `;
+                } else if (currentSearchCategory === 'blood_donor') {
+                    const availColor = item.availability === 'available' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800';
+                    html = `
+                        <div class="glass-card rounded-xl p-5 space-y-2">
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-bold text-white">${item.first_name} ${item.last_name}</h4>
+                                <span class="text-[9px] uppercase font-bold px-2 py-0.5 rounded ${availColor}">${item.availability}</span>
+                            </div>
+                            <p class="text-3xl font-extrabold text-rose-500">${item.blood_group}</p>
+                            <p class="text-xs text-slate-300"><i class="fa-solid fa-phone mr-1"></i>${item.contact_number}</p>
+                            <p class="text-xs text-slate-400"><i class="fa-solid fa-map-pin mr-1"></i>${item.address || 'N/A'}</p>
+                        </div>
+                    `;
+                } else if (currentSearchCategory === 'ambulance') {
+                    const availColor = item.is_available ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400';
+                    html = `
+                        <div class="glass-card rounded-xl p-5 space-y-2">
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-bold text-white">${item.owner_name}</h4>
+                                <span class="text-[9px] uppercase font-bold px-2 py-0.5 rounded ${availColor}">${item.is_available ? 'available' : 'busy'}</span>
+                            </div>
+                            <p class="text-xs text-indigo-400 font-bold">${item.ambulance_type.toUpperCase()} ambulance</p>
+                            <p class="text-xs text-slate-300">Contact: ${item.contact_number}</p>
+                            <p class="text-xs text-slate-400">Vehicle No: ${item.vehicle_number}</p>
+                        </div>
+                    `;
+                } else if (currentSearchCategory === 'pharmacy') {
+                    const openColor = item.is_open ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400';
+                    html = `
+                        <div class="glass-card rounded-xl p-5 space-y-2">
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-bold text-white">${item.pharmacy_name}</h4>
+                                <span class="text-[9px] uppercase font-bold px-2 py-0.5 rounded ${openColor}">${item.is_open ? 'open' : 'closed'}</span>
+                            </div>
+                            <p class="text-xs text-slate-300">Contact: ${item.contact_number}</p>
+                            <p class="text-xs text-slate-400"><i class="fa-solid fa-map-pin mr-1"></i>${item.address || 'N/A'}</p>
+                        </div>
+                    `;
+                } else if (currentSearchCategory === 'diagnostic') {
+                    const openColor = item.is_open ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400';
+                    html = `
+                        <div class="glass-card rounded-xl p-5 space-y-2">
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-bold text-white">${item.diagnostic_name}</h4>
+                                <span class="text-[9px] uppercase font-bold px-2 py-0.5 rounded ${openColor}">${item.is_open ? 'open' : 'closed'}</span>
+                            </div>
+                            <p class="text-xs text-slate-300">Contact: ${item.contact_number}</p>
+                            <p class="text-xs text-slate-400"><i class="fa-solid fa-map-pin mr-1"></i>${item.address || 'N/A'}</p>
+                        </div>
+                    `;
+                }
+                container.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        // -------------------------------------------------------------
+        // DOCTOR APPOINTMENTS & SCHEDULING OPERATIONS
+        // -------------------------------------------------------------
+        async function loadDoctorSchedules() {
+            const container = document.getElementById('doctor-sched-list');
+            container.innerHTML = '<p class="text-xs text-slate-500">Loading weekly schedules...</p>';
+            const token = localStorage.getItem('access_token');
+            try {
+                // Fetch profiles doctors me to get schedule rules
+                const res = await fetch(`${API_BASE}/profiles/doctors/me/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (res.ok && data.status) {
+                    const schedules = data.doctor.schedules || [];
+                    if (schedules.length === 0) {
+                        container.innerHTML = '<p class="text-xs text-slate-500">No weekly schedule rules added yet.</p>';
+                        return;
+                    }
+                    container.innerHTML = '';
+                    schedules.forEach(sc => {
+                        container.insertAdjacentHTML('beforeend', `
+                            <div class="flex justify-between items-center text-xs bg-slate-900/60 py-2 px-3 rounded-lg border border-white/5">
+                                <span class="font-bold text-white capitalize">${sc.day}</span>
+                                <span class="text-slate-400">${sc.start_time} - ${sc.end_time}</span>
+                                <span class="text-[10px] text-slate-500">Max: ${sc.max_patients}</span>
+                            </div>
+                        `);
+                    });
+                }
+            } catch (err) {}
+        }
+
+        async function doctorAddSchedule(e) {
+            e.preventDefault();
+            const token = localStorage.getItem('access_token');
+            const day = document.getElementById('sched-day').value;
+            const max = document.getElementById('sched-max').value;
+            const start = document.getElementById('sched-start').value;
+            const end = document.getElementById('sched-end').value;
+
+            // First we need doctor's ID
+            try {
+                const meRes = await fetch(`${API_BASE}/profiles/doctors/me/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const meData = await meRes.json();
+                if (meRes.ok && meData.status) {
+                    const doctorId = meData.doctor.id;
+                    const res = await fetch(`${API_BASE}/profiles/doctors/${doctorId}/schedule/`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ day: day, start: start, end: end, max_patients: max })
+                    });
+                    if (res.ok) {
+                        showToast("Weekly schedule slot added successfully!");
+                        loadDoctorSchedules();
+                    }
+                }
+            } catch (err) {}
+        }
+
+        async function loadDoctorDateSlots() {
+            const container = document.getElementById('doctor-date-slots-list');
+            container.innerHTML = '<p class="text-xs text-slate-500">Loading date slots...</p>';
+            const token = localStorage.getItem('access_token');
+            try {
+                const res = await fetch(`${API_BASE}/profiles/doctors/my-slots/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (res.ok && data.status) {
+                    const slots = data.slots || [];
+                    if (slots.length === 0) {
+                        container.innerHTML = '<p class="text-xs text-slate-500">Add weekly schedule rules first to generate dates.</p>';
+                        return;
+                    }
+                    container.innerHTML = '';
+                    slots.forEach(slot => {
+                        const checked = slot.is_approved ? 'checked' : '';
+                        const checkLabel = slot.is_approved ? 'Approved' : 'Pending';
+                        const checkColor = slot.is_approved ? 'text-emerald-400 font-bold' : 'text-slate-500';
+                        container.insertAdjacentHTML('beforeend', `
+                            <div class="flex items-center justify-between text-xs bg-slate-900/60 py-2.5 px-3 rounded-lg border border-white/5">
+                                <div>
+                                    <p class="font-bold text-white">${slot.date}</p>
+                                    <p class="text-[10px] text-slate-400 capitalize">${slot.start_time}-${slot.end_time}</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] ${checkColor}">${checkLabel}</span>
+                                    <input type="checkbox" ${checked} onchange="toggleDoctorSlot(${slot.id})" class="w-4 h-4 accent-indigo-500 bg-slate-900 rounded border-white/10">
+                                </div>
+                            </div>
+                        `);
+                    });
+                }
+            } catch (err) {}
+        }
+
+        async function toggleDoctorSlot(slotId) {
+            const token = localStorage.getItem('access_token');
+            try {
+                const res = await fetch(`${API_BASE}/profiles/doctors/toggle-slot/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ slot_id: slotId })
+                });
+                if (res.ok) {
+                    showToast("Calendar Date approval updated.");
+                    loadDoctorDateSlots();
+                }
+            } catch (err) {}
+        }
+
+        async function loadDoctorBookings() {
+            const container = document.getElementById('doctor-bookings-list');
+            container.innerHTML = '<p class="text-xs text-slate-500">Loading bookings...</p>';
+            const token = localStorage.getItem('access_token');
+            try {
+                const res = await fetch(`${API_BASE}/profiles/bookings/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    const bookings = data.results || data;
+                    if (bookings.length === 0) {
+                        container.innerHTML = '<p class="text-xs text-slate-500">No appointment bookings received yet.</p>';
+                        return;
+                    }
+                    container.innerHTML = '';
+                    bookings.forEach(b => {
+                        container.insertAdjacentHTML('beforeend', `
+                            <div class="bg-black/20 p-4 rounded-xl border border-white/5 flex justify-between items-center text-xs">
+                                <div>
+                                    <p class="font-bold text-white text-sm">${b.patient_name}</p>
+                                    <p class="text-[11px] text-slate-400 mt-1"><i class="fa-solid fa-calendar mr-1"></i>Date: ${b.appointment_date}</p>
+                                    <p class="text-[11px] text-slate-400"><i class="fa-solid fa-phone mr-1"></i>Phone: ${b.contact_number}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1 bg-black/40 p-2 rounded-lg italic">Reason: ${b.problem_description || 'N/A'}</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="inline-block uppercase font-bold text-[10px] tracking-wider rounded-md px-2.5 py-1 bg-indigo-950 text-indigo-400 border border-indigo-700/50">${b.status}</span>
+                                </div>
+                            </div>
+                        `);
+                    });
+                }
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // BOOKING APPOINTMENTS MODAL
+        // -------------------------------------------------------------
+        async function openBookingModal(doctorId, doctorName) {
+            document.getElementById('booking-modal').classList.remove('hidden');
+            document.getElementById('booking-doctor-id').value = doctorId;
+            document.getElementById('booking-doctor-title').innerText = `Appointment with ${doctorName}`;
+            
+            const select = document.getElementById('booking-slot-id');
+            select.innerHTML = '<option value="">Loading available slots...</option>';
+            
+            try {
+                const res = await fetch(`${API_BASE}/profiles/doctors/${doctorId}/available-slots/`);
+                const data = await res.json();
+                if (res.ok && data.status) {
+                    const slots = data.slots || [];
+                    if (slots.length === 0) {
+                        select.innerHTML = '<option value="">No approved dates slot available.</option>';
+                        return;
+                    }
+                    select.innerHTML = '<option value="">Choose slot date & time</option>';
+                    slots.forEach(slot => {
+                        select.insertAdjacentHTML('beforeend', `
+                            <option value="${slot.id}">${slot.date} (${slot.start_time}-${slot.end_time}) at ${slot.hospital_name || 'Chamber'}</option>
+                        `);
+                    });
+                }
+            } catch (err) {}
+        }
+
+        function closeBookingModal() {
+            document.getElementById('booking-modal').classList.add('hidden');
+        }
+
+        async function submitBooking(e) {
+            e.preventDefault();
+            const token = localStorage.getItem('access_token');
+            const doctorId = document.getElementById('booking-doctor-id').value;
+            const slotId = document.getElementById('booking-slot-id').value;
+            const name = document.getElementById('booking-patient-name').value;
+            const contact = document.getElementById('booking-contact').value;
+            const problem = document.getElementById('booking-problem').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/profiles/bookings/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        doctor: doctorId,
+                        date_slot: slotId,
+                        patient_name: name,
+                        contact_number: contact,
+                        problem_description: problem,
+                        appointment_date: "2026-08-15" // dynamically synchronized by backend, passing placeholder
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast("Appointment booked successfully!");
+                    closeBookingModal();
+                    loadPatientBookings();
+                } else {
+                    showToast(data.message || data.error || "Booking failed.");
+                }
+            } catch (err) {
+                showToast("Booking failed!");
+            }
+        }
+
+        async function loadPatientBookings() {
+            const container = document.getElementById('patient-bookings-list');
+            container.innerHTML = '<p class="text-xs text-slate-500">Loading bookings...</p>';
+            const token = localStorage.getItem('access_token');
+            try {
+                const res = await fetch(`${API_BASE}/profiles/bookings/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    const bookings = data.results || data;
+                    if (bookings.length === 0) {
+                        container.innerHTML = '<p class="text-xs text-slate-500">No appointment bookings made yet.</p>';
+                        return;
+                    }
+                    container.innerHTML = '';
+                    bookings.forEach(b => {
+                        container.insertAdjacentHTML('beforeend', `
+                            <div class="bg-black/20 p-4 rounded-xl border border-white/5 flex justify-between items-center text-xs">
+                                <div>
+                                    <p class="font-bold text-white text-sm">Appointment with ${b.doctor_name}</p>
+                                    <p class="text-[11px] text-slate-400 mt-1"><i class="fa-solid fa-calendar mr-1"></i>Date: ${b.appointment_date}</p>
+                                    <p class="text-[11px] text-slate-400"><i class="fa-solid fa-phone mr-1"></i>Patient: ${b.patient_name}</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="inline-block uppercase font-bold text-[10px] tracking-wider rounded-md px-2.5 py-1 bg-indigo-950 text-indigo-400 border border-indigo-700/50">${b.status}</span>
+                                </div>
+                            </div>
+                        `);
+                    });
+                }
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // BLOOD DONOR DASHBOARD ACTIONS
+        // -------------------------------------------------------------
+        async function toggleDonorAvailability(newStatus) {
+            const token = localStorage.getItem('access_token');
+            try {
+                const res = await fetch(`${API_BASE}/profiles/blood-donors/me/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ availability: newStatus })
+                });
+                if (res.ok) {
+                    showToast(`Availability updated to: ${newStatus}`);
+                    loadDashboardSpecifics();
+                }
+            } catch (err) {}
+        }
+
+        async function submitDonationRecord(e) {
+            e.preventDefault();
+            const token = localStorage.getItem('access_token');
+            const date = document.getElementById('don-date').value;
+            const time = document.getElementById('don-time').value;
+            const facility = document.getElementById('don-facility').value;
+            const desc = document.getElementById('don-desc').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/profiles/blood-donors/donation-post/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        donation_date: date,
+                        donation_time: time,
+                        medical_facility: facility,
+                        patient_description: desc,
+                        bags_donated: 1
+                    })
+                });
+                if (res.ok) {
+                    showToast("Donation logged! Lives saved counter incremented.");
+                    loadDashboardSpecifics();
+                }
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // AMBULANCE STATUS ACTIONS
+        // -------------------------------------------------------------
+        async function toggleAmbulanceService(isActive) {
+            const token = localStorage.getItem('access_token');
+            try {
+                const res = await fetch(`${API_BASE}/profiles/ambulances/me/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_available: isActive })
+                });
+                if (res.ok) {
+                    showToast(`Service status updated successfully.`);
+                    loadDashboardSpecifics();
+                }
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // PHARMACY INVENTORY ACTIONS
+        // -------------------------------------------------------------
+        async function togglePharmacyOpen(isOpen) {
+            const token = localStorage.getItem('access_token');
+            try {
+                const res = await fetch(`${API_BASE}/profiles/pharmacies/me/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_open: isOpen })
+                });
+                if (res.ok) {
+                    showToast("Pharmacy status updated.");
+                    loadDashboardSpecifics();
+                }
+            } catch (err) {}
+        }
+
+        async function submitMedicine(e) {
+            e.preventDefault();
+            const token = localStorage.getItem('access_token');
+            const payload = {
+                name: document.getElementById('med-name').value,
+                generic_name: document.getElementById('med-generic').value,
+                category: document.getElementById('med-cat').value,
+                price: document.getElementById('med-price').value,
+                stock_quantity: document.getElementById('med-qty').value,
+                description: document.getElementById('med-desc').value,
+                in_stock: true
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/profiles/medicines/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    showToast("Medicine added to inventory.");
+                    loadDashboardSpecifics();
+                }
+            } catch (err) {}
+        }
+
+        async function loadPharmacyMedicines(pharmacyId) {
+            const container = document.getElementById('pharmacy-med-catalog');
+            container.innerHTML = '<p class="text-xs text-slate-500">Loading medicines...</p>';
+            try {
+                const res = await fetch(`${API_BASE}/profiles/medicines/?pharmacy=${pharmacyId}`);
+                const data = await res.json();
+                if (res.ok) {
+                    const meds = data.results || data;
+                    if (meds.length === 0) {
+                        container.innerHTML = '<p class="text-xs text-slate-500">No medicines in inventory catalog.</p>';
+                        return;
+                    }
+                    container.innerHTML = '';
+                    meds.forEach(m => {
+                        container.insertAdjacentHTML('beforeend', `
+                            <div class="bg-black/20 p-3.5 rounded-xl border border-white/5 flex justify-between items-center text-xs">
+                                <div>
+                                    <p class="font-bold text-white text-sm">${m.name}</p>
+                                    <p class="text-[10px] text-slate-400 mt-1">${m.generic_name} — Qty: ${m.stock_quantity}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-extrabold text-indigo-400 text-sm">${m.price} BDT</p>
+                                    <span class="inline-block text-[9px] uppercase font-bold text-emerald-400 mt-1">In Stock</span>
+                                </div>
+                            </div>
+                        `);
+                    });
+                }
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // DIAGNOSTIC TEST CATALOG ACTIONS
+        // -------------------------------------------------------------
+        async function toggleDiagnosticOpen(isOpen) {
+            const token = localStorage.getItem('access_token');
+            try {
+                const res = await fetch(`${API_BASE}/profiles/diagnostics/me/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_open: isOpen })
+                });
+                if (res.ok) {
+                    showToast("Diagnostic center status updated.");
+                    loadDashboardSpecifics();
+                }
+            } catch (err) {}
+        }
+
+        async function submitDiagnosticTest(e) {
+            e.preventDefault();
+            const token = localStorage.getItem('access_token');
+            const payload = {
+                test_name: document.getElementById('test-name').value,
+                category: document.getElementById('test-cat').value,
+                price: document.getElementById('test-price').value,
+                criteria: document.getElementById('test-criteria').value,
+                preparation_instructions: document.getElementById('test-prep').value,
+                is_available: true
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/profiles/diagnostic-tests/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    showToast("Test added to diagnostic catalog.");
+                    loadDashboardSpecifics();
+                }
+            } catch (err) {}
+        }
+
+        async function loadDiagnosticTests(diagId) {
+            const container = document.getElementById('diagnostic-test-catalog');
+            container.innerHTML = '<p class="text-xs text-slate-500">Loading tests...</p>';
+            try {
+                const res = await fetch(`${API_BASE}/profiles/diagnostic-tests/?diagnostic=${diagId}`);
+                const data = await res.json();
+                if (res.ok) {
+                    const tests = data.results || data;
+                    if (tests.length === 0) {
+                        container.innerHTML = '<p class="text-xs text-slate-500">No diagnostic tests registered yet.</p>';
+                        return;
+                    }
+                    container.innerHTML = '';
+                    tests.forEach(t => {
+                        container.insertAdjacentHTML('beforeend', `
+                            <div class="bg-black/20 p-3.5 rounded-xl border border-white/5 flex justify-between items-center text-xs">
+                                <div>
+                                    <p class="font-bold text-white text-sm">${t.test_name}</p>
+                                    <p class="text-[10px] text-slate-400 mt-1">${t.category} — ${t.criteria}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-extrabold text-indigo-400 text-sm">${t.price} BDT</p>
+                                    <span class="inline-block text-[9px] uppercase font-bold text-emerald-400 mt-1">Available</span>
+                                </div>
+                            </div>
+                        `);
+                    });
+                }
+            } catch (err) {}
+        }
+
+        // -------------------------------------------------------------
+        // TOAST ENGINE
+        // -------------------------------------------------------------
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-message');
+            msgEl.innerText = message;
+            
+            toast.classList.remove('hidden');
+            // Transition elements in
+            setTimeout(() => {
+                toast.style.transform = 'translateY(0)';
+                toast.style.opacity = '1';
+            }, 50);
+
+            // Transition elements out
+            setTimeout(() => {
+                toast.style.transform = 'translateY(10px)';
+                toast.style.opacity = '0';
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 300);
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

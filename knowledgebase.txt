@@ -1,0 +1,397 @@
+================================================================================
+PROJECT NAME: MEDIHUB
+================================================================================
+Medihub is a healthcare platform built for Bangladesh. It connects patients,
+doctors, blood donors, ambulance services, pharmacies, and diagnostic centers
+in one unified system. The platform allows users to find medical help, post
+emergency needs, read health blogs, and receive push notifications — all
+through a REST API backend.
+
+================================================================================
+TECH STACK
+================================================================================
+- Backend        : Django 4.2 + Django REST Framework
+- Database       : PostgreSQL 16
+- Cache          : Redis 7
+- Task Queue     : Celery + RabbitMQ (async email, background jobs)
+- Auth           : JWT (SimpleJWT) — access + refresh tokens
+- API Docs       : drf-yasg (Swagger UI at /swagger/)
+- Push Notif     : Firebase Cloud Messaging (FCM)
+- Monitoring     : Prometheus + Grafana + Loki (Promtail)
+- Web Server     : Gunicorn (3 instances) behind Nginx (load balanced)
+- Containerized  : Docker + Docker Compose
+- Timezone       : Asia/Dhaka (Bangladesh)
+
+================================================================================
+USER ROLES (7 total)
+================================================================================
+
+1. ADMIN
+   - Superuser with full access to Django admin panel
+   - Manages all users, profiles, posts, blogs, and platform data
+   - Can seed data (divisions, districts, upazilas, unions, doctors, etc.)
+   - Created via Django management command (root_seed)
+
+2. REGULAR USER (user_type = "regular") appname : profile
+   - Standard patient/general user of the platform
+   - Profile fields: first_name, last_name, gender, date_of_birth,
+     contact_number, address, profile picture, division, district, upazila
+   - Can create posts (blood need, medicine need, equipment need, general)
+   - Can read and interact with doctor blogs (like, comment)
+   - Can search for doctors, blood donors, pharmacies, ambulances, diagnostics
+   - Can receive app notifications and push notifications
+
+3. DOCTOR (user_type = "doctor") AppName : Doctor
+   - Licensed medical professional
+   - Profile fields: first_name, middle_name, last_name, gender, contact_number,
+     profile picture, division, district, upazila, union,
+     specialization, sub_specialization, qualifications (M2M),
+     hospital_affiliations (M2M), years_of_experience,
+     license_number, license_validity
+   - Extended profile: website, social_link, bio, language (DoctorDetails)
+   - Can add education history (DoctorEducation)
+   - Can add work experience (DoctorWorkingExperience)
+   - Can set weekly schedule (DoctorScheduling — day, start time, end time, hospital, max_patients)
+   - Dynamic Scheduling & Booking: Generates upcoming date-specific slots (DoctorDateSlot) for the next 14 days based on weekly rules. Bookings require slot confirmation/approval (is_approved) by the doctor. Slot capacity is enforced (up to max_patients) on a first-come, first-served basis.
+   - Can write and publish health blog posts
+   - Has a stats/feed model (DoctorStats) tracking:
+     avg_rating, total_ratings, profile_views, followers,
+     total_questions, feed_impressions, feed_clicks, total_bookings,
+     feed_score, is_online, is_verified, last_active,
+     profile_completed, search_score, recommendation_score
+   - Can be rated by regular users (DoctorRating — unique per user per doctor)
+
+4. BLOOD DONOR (user_type = "blood_donor") appname ; Doonar
+   - Registered blood donor
+   - Profile fields: first_name, last_name, gender, date_of_birth,
+     contact_number, blood_group (A+/A-/B+/B-/AB+/AB-/O+/O-),
+     availability (available/unavailable), last_donated date,
+     address, division, district, upazila
+   - User model has is_blood_donor = True flag
+   - Can be searched by blood group and location
+   - Can update availability status
+   - can can serch and filter blood donnar when they need donay,can coantct and call them
+   - blood donar can share post there donation post in Blood donation post pager with sort explanation ,with time,date ,medicaland patient descritpin 
+   - when a bllod donar will post a donation post thiere will be increat a lifer counter in his profiel to encourge hospital_name
+   - any organization or any people direct find or filter blood donaer with filtering  in blood donation page
+
+5. AMBULANCE (user_type = "ambulance") appname :Ambulance 
+   - Ambulance service provider
+   - Profile fields: owner_name, contact_number,
+     ambulance_type (basic/advanced/icu), vehicle_number (unique),
+     is_available, address, division, district, upazila
+   - Can be searched by location and type
+   - Can update availability status
+   - can be conact
+
+6. PHARMACY (user_type = "pharmacy") appnme : pharmacy
+   - Licensed pharmacy
+   - Profile fields: pharmacy_name, owner_name, contact_number,
+     license_number (unique), license_validity, is_open,
+     address, division, district, upazila
+   - Can be searched by location
+   - phermacy can add difffent types of medicine all ther related things related to medical
+   - user can secat medicine and see the that medicia and related medicice price and conact with pharmecy to buy
+
+7. DIAGNOSTIC (user_type = "diagnostic") : appname : Diagonostic
+   - Licensed diagnostic center
+   - Profile fields: diagnostic_name, owner_name, contact_number,
+     license_number (unique), license_validity, is_open,
+     address, division, district, upazila
+   - Can be searched by location
+   - this featuere is very important ,, ...................
+   - here you willl desing full model how a Diagonstic model shoudl build
+   - here basically Diagosint add hters test and triteria and money..and user can check and contact with them
+
+================================================================================
+AUTHENTICATION SYSTEM
+================================================================================
+All authentication uses email + password (no username).
+JWT tokens: access token (60 days default) + refresh token (60 days default).
+Refresh tokens are rotated and blacklisted after use.
+
+REGISTRATION FLOW (2-step OTP verification):
+  Step 1 — Register: user submits data → OTP sent to email via Celery
+  Step 2 — Verify OTP: user submits email + OTP → profile created → JWT tokens returned
+
+Each user type has its own register endpoint:
+  POST /authentication/signup/doctor/register/
+  POST /authentication/signup/user/register/
+  POST /authentication/signup/blood-donor/register/
+  POST /authentication/signup/ambulance/register/
+  POST /authentication/signup/pharmacy/register/
+  POST /authentication/signup/diagnostic/register/
+
+  POST /authentication/signup/verify/          — verify OTP (all types)
+  POST /authentication/signup/resend-otp/      — resend OTP if expired
+
+LOGIN / LOGOUT:
+  POST /authentication/auth/login/             — returns access + refresh + user_type + user_id
+  POST /authentication/auth/logout/            — blacklists refresh token
+
+PASSWORD MANAGEMENT:
+  POST /authentication/password-reset/send-otp/       — Step 1: send OTP to email
+  POST /authentication/password-reset/verify-otp/     — Step 2: verify OTP, returns reset_token
+  POST /authentication/password-reset/reset-password/ — Step 3: reset_token + new_password
+  POST /authentication/auth/change-password/          — authenticated user changes password
+                                                         returns new access + refresh tokens
+
+OTP details:
+  - 6-digit numeric OTP
+  - Stored as SHA256 hash in Redis cache
+  - Expires in 5 minutes (MEDIUM TTL = 300s)
+  - Sent via Gmail SMTP through Celery worker asynchronously
+
+================================================================================
+LOCATION SYSTEM
+================================================================================
+Bangladesh administrative hierarchy (4 levels):
+  Division → District → Upazila → Union
+
+All location data is pre-seeded from JSON datasets.
+  - 8 Divisions
+  - 64 Districts (with latitude/longitude)
+  - 495 Upazilas
+  - 4,554 Unions
+
+Location is used for:
+  - Profile location of all user types
+  - Filtering/searching doctors, donors, pharmacies, ambulances, diagnostics
+  - Post location targeting
+
+API:
+  GET /location/unions/?upazila=<id>   — list unions by upazila
+
+================================================================================
+POST SYSTEM (Community Need Posts)
+================================================================================
+Any authenticated user can create need posts. 5 types:
+
+1. BLOOD NEED POST
+   Fields: patient_name, patient_age, patient_gender, blood_group,
+           bags_needed, hospital_name, hospital_address,
+           division, district, upazila, needed_date, needed_time,
+           contact_number, urgency (low/medium/high/critical),
+           description, status (open/fulfilled/closed)
+
+2. MEDICINE NEED POST
+   Fields: medicine_name, quantity, description,
+           division, district, upazila, address,
+           contact_number, urgency, status
+
+3. EQUIPMENT NEED POST
+   Fields: equipment_name, quantity, condition (new/good/fair/poor),
+           image, description, division, district, upazila, address,
+           contact_number, urgency, status
+
+4. GENERAL POST
+   Fields: title, content, image,
+           division, district, upazila,
+           contact_number, status
+
+5. AMBULANCE NEED POST
+   Fields: ambulance_type (basic/advanced/icu),
+           needed_date, needed_time, contact_number,
+           division, district, upazila, address,
+           urgency, description, status
+
+All posts support:
+  - Status: open / fulfilled / closed
+  - Urgency levels: low / medium / high / critical
+  - Ordered by newest first
+  - Generic interactions: PostLike (likes count), PostComment (comments and listings), and PostShare (shares copy/count logging)
+
+================================================================================
+BLOG SYSTEM
+================================================================================
+Only doctors can write blog posts.
+
+BLOG POST fields:
+  - doctor (FK), title, slug (unique), content, category, tags,
+    thumbnail, status (draft/published), views, like_count, comment_count
+
+Categories:
+  general, cardiology, neurology, pediatrics, gynecology, dermatology,
+  orthopedics, nutrition, mental_health, diabetes, first_aid, awareness
+
+BLOG INTERACTIONS:
+  - BlogLike: any user can like a post (unique per user per post)
+    like_count auto-incremented/decremented on BlogPost
+  - BlogComment: any user can comment, supports nested replies (parent FK)
+    comment_count auto-incremented/decremented on BlogPost
+  - BlogCommentLike: any user can like a comment (unique per user per comment)
+    like_count auto-incremented/decremented on BlogComment
+  - BlogMedia: images/videos attached to blog posts
+
+================================================================================
+NOTIFICATION SYSTEM
+================================================================================
+Two types of notifications:
+
+1. APP NOTIFICATION (in-app)
+   - Stored in database (AppNotification model)
+   - Fields: user, title, message, is_read, created_at
+   - Indexed on user and created_at for fast queries
+   - CRUD operations via API
+
+2. PUSH NOTIFICATION (Firebase FCM)
+   - Device token registration (Device model: user, token)
+   - Send push notifications to registered devices
+   - Test push endpoint available
+   - Firebase credentials loaded from JSON key file
+
+APIs:
+  POST /notification/device/register/   — register FCM device token
+  POST /notification/push/test/         — test push notification
+  GET  /notification/push/tester/       — browser test page
+
+================================================================================
+BACKGROUND TASKS (Celery)
+================================================================================
+Broker: RabbitMQ
+Result Backend: Redis
+
+Async Tasks:
+  - send_otp_email_task          — send OTP email on registration
+  - send_password_reset_otp_task — send password reset OTP email
+
+Scheduled Tasks (Celery Beat):
+  - beat_health_check            — every 30 seconds
+  - beat_log_active_users        — every 60 seconds
+  - beat_cleanup_expired_otps    — every 5 minutes
+  - beat_system_ping             — every 10 seconds
+
+================================================================================
+CACHING STRATEGY
+================================================================================
+Backend: Redis (falls back to LocMemCache if Redis unavailable)
+
+Cache TTLs:
+  SMALL      = 60s
+  MEDIUM     = 300s  (used for OTP + signup session)
+  LARGE      = 1000s
+  VERY_LARGE = 2000s
+  + random jitter (0-60s) to prevent cache avalanche
+
+Cache Keys:
+  user_signup:register:<email>   — stores signup data + hashed OTP together
+  auth:reset_otp:<email>         — hashed password reset OTP
+  auth:reset_token:<email>       — password reset token (after OTP verified)
+
+================================================================================
+RATE LIMITING
+================================================================================
+  anon           : 100 requests/hour
+  user           : 1000 requests/hour
+  login_user     : 5 requests/minute
+  login_anon     : 5 requests/minute
+  signup_user    : 3 requests/hour
+  signup_anon    : 3 requests/hour
+  otp            : 10 requests/hour
+  password_reset : 5 requests/hour
+
+================================================================================
+INFRASTRUCTURE
+================================================================================
+Docker Compose services:
+  nginx          — reverse proxy, load balancer (port 8080:80)
+  web1/web2/web3 — 3 Django/Gunicorn instances (ports 8011/8012/8013)
+  db             — PostgreSQL 16
+  redis          — Redis 7 (password protected)
+  rabbitmq       — RabbitMQ 3 with management UI
+  celery_worker  — Celery worker
+  celery_beat    — Celery beat scheduler
+  migrate        — runs migrations + collectstatic on startup
+
+Monitoring stack (separate):
+  Prometheus     — metrics collection (/metrics endpoint via django-prometheus)
+  Grafana        — dashboards
+  Loki + Promtail — log aggregation
+  Alertmanager   — alerts
+
+Logging:
+  - Structured JSON logs via python-json-logger
+  - Streamed to stdout (captured by Docker)
+  - Log level: INFO
+
+Security:
+  - HTTPS via Nginx SSL termination (certs in nginx/certs/)
+  - CORS configured via env vars
+  - CSRF protection
+  - JWT token blacklisting on logout
+  - Password validation (min 9 chars, no common/numeric-only passwords)
+  - Secrets loaded from .env via python-decouple (never hardcoded)
+
+================================================================================
+API DOCUMENTATION
+================================================================================
+Swagger UI  : http://<host>/swagger/
+OpenAPI JSON: http://<host>/swagger/?format=openapi
+
+Swagger Tags:
+  Signup               — all registration endpoints (6 user types + verify + resend)
+  Verify OTP           — OTP verify and resend
+  Login Access Management — login, logout
+  Password Management  — send-otp, verify-otp, reset-password, change-password
+
+================================================================================
+HEALTH & MONITORING ENDPOINTS
+================================================================================
+  GET  /           — health check
+  GET  /health/    — health check (returns system status JSON)
+  GET  /metrics    — Prometheus metrics
+  GET  /queue/dashboard/ — RabbitMQ queue dashboard (HTML)
+  POST /queue/test/      — test message queue
+
+================================================================================
+DATABASE MODELS SUMMARY
+================================================================================
+authentication:
+  User — email, user_type, is_active, is_staff, is_blood_donor
+
+profiles:
+  Doctor, DoctorDetails, DoctorEducation, DoctorWorkingExperience,
+  DoctorScheduling, DoctorDateSlot, DoctorRating, DoctorStats,
+  DoctorBooking, Specialization, SubSpecialization, Qualification, Hospital,
+  RegularUserProfile, BloodDonor, AmbulanceProfile,
+  PharmacyProfile, DiagnosticProfile
+
+location:
+  Division, District, Upozila, Union
+
+post:
+  BloodNeedPost, MedicineNeedPost, EquipmentNeedPost, GeneralPost,
+  AmbulanceNeedPost, PostLike, PostComment, PostShare
+
+blog:
+  BlogPost, BlogMedia, BlogLike, BlogComment, BlogCommentLike
+
+notification:
+  AppNotification, Device (FCM push token)
+
+================================================================================
+FEATURES COMPLETED & EXPLAINED
+================================================================================
+- Single-Page Web Dashboard (/dashboard/): Fully functional responsive HTML/CSS/JS portal.
+  Supports registration flows with live location dropdown fetch APIs (Division, District, Upazila),
+  OTP verification, and custom role dashboards for Admin, Patient, Doctor, Donor, Ambulance,
+  Pharmacy, and Diagnostic Center profiles.
+- Doctor Scheduling & Approval System: Weekly schedule rule configurations (max seats, hospital),
+  date slot generation, permission checklists, and booking seat limit validations.
+- Post Interactions Feed: Unified emergency needs feed with liking, commenting, and link-sharing logs.
+- Inventory Management: Pharmacy medicine addition and Diagnostic Lab test cataloging.
+
+================================================================================
+FEATURES NOT YET IMPLEMENTED (planned)
+================================================================================
+- Blog CRUD APIs (create, publish, list, like, comment)
+- App notification CRUD API
+- Doctor feed/recommendation algorithm (DoctorStats model ready)
+- User follow system
+- Doctor Q&A system
+- Profile picture upload
+- Email verification on login (optional 2FA)
+
+================================================================================
+END OF KNOWLEDGE BASE
+================================================================================
