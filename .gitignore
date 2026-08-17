@@ -1,0 +1,108 @@
+# =====================
+# Python
+# =====================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =====================
+# Virtual Environment
+# =====================
+venv/
+env/
+.venv/
+.sixth/
+
+# =====================
+# Environment Variables
+# =====================
+.env
+.env.*
+!.env.example
+!.env.ci
+
+# Logs
+logs/*.log
+
+# =====================
+# Django stuff
+# =====================
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Media & Static
+media/
+staticfiles/
+
+# Collected static (optional)
+static/
+
+# =====================
+# Migrations (optional)
+# =====================
+# Uncomment if you want to ignore migrations
+# **/migrations/
+# !**/migrations/__init__.py
+
+# =====================
+# Test / Coverage
+# =====================
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+.pytest_cache/
+
+# =====================
+# IDE / Editors
+# =====================
+.idea/
+*.iml
+
+# =====================
+# OS files
+# =====================
+.DS_Store
+Thumbs.db
+
+# =====================
+# Celery / Redis
+# =====================
+celerybeat-schedule
+celerybeat.pid
+
+# =====================
+# Cache
+# =====================
+.cache/
+
+# =====================
+# Documentation
+# =====================
+Documentation/
+
+# =====================
+# SSL Certificates
+# =====================
+nginx/certs/
+
+# =====================
+# Monitoring credentials
+# =====================
+monitoring/alertmanager.yml
+
+# =====================
+# Firebase Credentials
+# =====================
+firebase-key.json
+serviceAccountKey.json
+*firebase*.json
+.zencoder/
+.zenflow/
+*.json
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
