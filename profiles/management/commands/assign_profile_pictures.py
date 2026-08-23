@@ -93,6 +93,12 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         import urllib.parse
+        from django.conf import settings
+
+        doctor_dp_dir = os.path.join(settings.MEDIA_ROOT, "doctor", "dp")
+        user_dp_dir = os.path.join(settings.MEDIA_ROOT, "user", "dp")
+        os.makedirs(doctor_dp_dir, exist_ok=True)
+        os.makedirs(user_dp_dir, exist_ok=True)
 
         # ── Doctors ──────────────────────────────────────────────
         doctors = Doctor.objects.filter(profile_dp='')
@@ -102,7 +108,7 @@ class Command(BaseCommand):
             photos = DOCTOR_FEMALE_PHOTOS if doctor.gender == 'female' else DOCTOR_MALE_PHOTOS
             url = photos[i % len(photos)]
             filename = f"doctor_dp_{doctor.id}.jpg"
-            save_path = f"/app/media/doctor/dp/{filename}"
+            save_path = os.path.join(doctor_dp_dir, filename)
 
             if download_photo(url, save_path):
                 doctor.profile_dp = f"doctor/dp/{filename}"
@@ -128,7 +134,7 @@ class Command(BaseCommand):
             photos = USER_FEMALE_PHOTOS if profile.gender == 'female' else USER_MALE_PHOTOS
             url = photos[i % len(photos)]
             filename = f"user_dp_{profile.id}.jpg"
-            save_path = f"/app/media/user/dp/{filename}"
+            save_path = os.path.join(user_dp_dir, filename)
 
             if download_photo(url, save_path):
                 profile.profile_dp = f"user/dp/{filename}"

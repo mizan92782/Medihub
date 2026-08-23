@@ -24,7 +24,8 @@ class Command(BaseCommand):
             data = json.load(f)
 
         for item in data:
-            user, _ = User.objects.get_or_create(email=item['email'])
+            user, _ = User.objects.get_or_create(email=item['email'], defaults={'user_type': 'doctor'})
+            user.user_type = 'doctor'
             user.set_password(item['password'])
             user.save()
 
@@ -83,14 +84,19 @@ class Command(BaseCommand):
                 for exp in item.get('experiences', [])
             ])
 
-            DoctorScheduling.objects.bulk_create([
-                DoctorScheduling(
-                    doctor=doctor,
-                    day=sch['day'],
-                    start=sch['start'],
-                    end=sch['end'],
+            affiliated_hospitals = list(hospitals)
+            schedules_to_create = []
+            for i, sch in enumerate(item.get('schedules', [])):
+                hospital_assigned = affiliated_hospitals[i % len(affiliated_hospitals)] if affiliated_hospitals else None
+                schedules_to_create.append(
+                    DoctorScheduling(
+                        doctor=doctor,
+                        day=sch['day'],
+                        start=sch['start'],
+                        end=sch['end'],
+                        hospital=hospital_assigned
+                    )
                 )
-                for sch in item.get('schedules', [])
-            ])
+            DoctorScheduling.objects.bulk_create(schedules_to_create)
 
         self.stdout.write(self.style.SUCCESS('Doctor profiles populated successfully'))

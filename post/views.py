@@ -319,19 +319,52 @@ class PostFeedViewSet(viewsets.ViewSet):
                 
                 email = ""
                 user_id = None
+                author_user = None
                 if post_type == 'blood_donation':
                     if post.donor and post.donor.user:
                         email = post.donor.user.email
                         user_id = post.donor.user.id
+                        author_user = post.donor.user
                 else:
                     if post.user:
                         email = post.user.email
                         user_id = post.user.id
+                        author_user = post.user
+
+                author_name = email.split("@")[0] if email else "User"
+                author_avatar = None
+                if author_user:
+                    if hasattr(author_user, 'profile') and author_user.profile:
+                        prof = author_user.profile
+                        author_name = f"{prof.first_name} {prof.last_name}"
+                        author_avatar = prof.profile_dp.url if prof.profile_dp else None
+                    elif hasattr(author_user, 'doctor') and author_user.doctor:
+                        doc = author_user.doctor
+                        author_name = f"Dr. {doc.first_name} {doc.last_name}"
+                        author_avatar = doc.profile_dp.url if doc.profile_dp else None
+                    elif hasattr(author_user, 'blood_donor') and author_user.blood_donor:
+                        donor = author_user.blood_donor
+                        author_name = f"{donor.first_name} {donor.last_name}"
+                        author_avatar = donor.profile_dp.url if donor.profile_dp else None
+                    elif hasattr(author_user, 'ambulance') and author_user.ambulance:
+                        amb = author_user.ambulance
+                        author_name = amb.owner_name
+                        author_avatar = amb.profile_dp.url if amb.profile_dp else None
+                    elif hasattr(author_user, 'pharmacy') and author_user.pharmacy:
+                        ph = author_user.pharmacy
+                        author_name = ph.pharmacy_name
+                        author_avatar = ph.profile_dp.url if ph.profile_dp else None
+                    elif hasattr(author_user, 'diagnostic') and author_user.diagnostic:
+                        dg = author_user.diagnostic
+                        author_name = dg.diagnostic_name
+                        author_avatar = dg.profile_dp.url if dg.profile_dp else None
 
                 feed_items.append({
                     "id": post.id,
                     "user_email": email,
                     "user_id": user_id,
+                    "author_name": author_name,
+                    "author_avatar": author_avatar,
                     "post_type": post_type,
                     "created": post.created,
                     "urgency": getattr(post, 'urgency', 'medium'),

@@ -16,3 +16,4 @@ class BloodDonationPostSerializer(serializers.ModelSerializer):
     class Meta:
         model = BloodDonationPost
         fields = '__all__'
+        ref_name = 'DonorBloodDonationPost'

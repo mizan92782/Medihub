@@ -8,6 +8,7 @@ class SpecializationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Specialization
         fields = '__all__'
+        ref_name = 'DoctorSpecialization'
 
 class QualificationSerializer(serializers.ModelSerializer):
     class Meta:

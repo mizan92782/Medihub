@@ -18,6 +18,7 @@ from core.permissions import (
     IsDiagnosticUser,
 )
 from profiles.models import (
+    PracticeLocation,
     RegularUserProfile,
     Doctor,
     DoctorDetails,
@@ -41,6 +42,7 @@ from profiles.models import (
     DiagnosticTest,
 )
 from profiles.serializers import (
+    PracticeLocationSerializer,
     RegularUserProfileSerializer,
     DoctorProfileSerializer,
     DoctorDetailsSerializer,
@@ -131,29 +133,81 @@ class DoctorViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(APIResponse.success("Doctor details updated", "details", serializer.data))
 
-    @action(detail=True, methods=['post'], permission_classes=[IsDoctorUser], url_path='education')
-    def add_education(self, request, pk=None):
+    @action(detail=True, methods=['post', 'put', 'patch', 'delete'], permission_classes=[IsDoctorUser], url_path='education')
+    def manage_education(self, request, pk=None):
         doctor = self.get_object()
-        serializer = DoctorEducationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(doctor=doctor)
-        return Response(APIResponse.success("Education added", "education", serializer.data), status=status.HTTP_201_CREATED)
+        
+        if request.method in ['POST', 'PUT', 'PATCH']:
+            inst_name = request.data.get('institution')
+            if inst_name:
+                stripped = inst_name.strip()
+                if stripped:
+                    from profiles.models.doctor_prof_mod import Hospital
+                    exists = Hospital.objects.filter(name_eng__iexact=stripped).exists() or Hospital.objects.filter(name_bn__iexact=stripped).exists()
+                    if not exists:
+                        Hospital.objects.create(name_eng=stripped, name_bn=stripped)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsDoctorUser], url_path='experience')
-    def add_experience(self, request, pk=None):
-        doctor = self.get_object()
-        serializer = DoctorWorkingExperienceSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(doctor=doctor)
-        return Response(APIResponse.success("Experience added", "experience", serializer.data), status=status.HTTP_201_CREATED)
+        if request.method == 'POST':
+            serializer = DoctorEducationSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(doctor=doctor)
+            return Response(APIResponse.success("Education added", "education", serializer.data), status=status.HTTP_201_CREATED)
+        elif request.method in ['PUT', 'PATCH']:
+            edu_id = request.query_params.get('id') or request.data.get('id')
+            if not edu_id:
+                return Response(APIResponse.error("Education ID is required"), status=status.HTTP_400_BAD_REQUEST)
+            edu = DoctorEducation.objects.filter(doctor=doctor, id=edu_id).first()
+            if not edu:
+                return Response(APIResponse.error("Education not found"), status=status.HTTP_404_NOT_FOUND)
+            serializer = DoctorEducationSerializer(edu, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(APIResponse.success("Education updated successfully", "education", serializer.data))
+        elif request.method == 'DELETE':
+            edu_id = request.query_params.get('id')
+            if not edu_id:
+                return Response(APIResponse.error("Education ID is required"), status=status.HTTP_400_BAD_REQUEST)
+            edu = DoctorEducation.objects.filter(doctor=doctor, id=edu_id).first()
+            if not edu:
+                return Response(APIResponse.error("Education not found"), status=status.HTTP_404_NOT_FOUND)
+            edu.delete()
+            return Response(APIResponse.success("Education deleted successfully"), status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsDoctorUser], url_path='schedule')
-    def add_schedule(self, request, pk=None):
+    @action(detail=True, methods=['post', 'delete'], permission_classes=[IsDoctorUser], url_path='experience')
+    def manage_experience(self, request, pk=None):
         doctor = self.get_object()
-        serializer = DoctorSchedulingSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(doctor=doctor)
-        return Response(APIResponse.success("Schedule added", "schedule", serializer.data), status=status.HTTP_201_CREATED)
+        if request.method == 'POST':
+            serializer = DoctorWorkingExperienceSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(doctor=doctor)
+            return Response(APIResponse.success("Experience added", "experience", serializer.data), status=status.HTTP_201_CREATED)
+        elif request.method == 'DELETE':
+            exp_id = request.query_params.get('id')
+            if not exp_id:
+                return Response(APIResponse.error("Experience ID is required"), status=status.HTTP_400_BAD_REQUEST)
+            exp = DoctorWorkingExperience.objects.filter(doctor=doctor, id=exp_id).first()
+            if not exp:
+                return Response(APIResponse.error("Experience not found"), status=status.HTTP_404_NOT_FOUND)
+            exp.delete()
+            return Response(APIResponse.success("Experience deleted successfully"), status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post', 'delete'], permission_classes=[IsDoctorUser], url_path='schedule')
+    def manage_schedule(self, request, pk=None):
+        doctor = self.get_object()
+        if request.method == 'POST':
+            serializer = DoctorSchedulingSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(doctor=doctor)
+            return Response(APIResponse.success("Schedule added", "schedule", serializer.data), status=status.HTTP_201_CREATED)
+        elif request.method == 'DELETE':
+            sch_id = request.query_params.get('id')
+            if not sch_id:
+                return Response(APIResponse.error("Schedule ID is required"), status=status.HTTP_400_BAD_REQUEST)
+            sch = DoctorScheduling.objects.filter(doctor=doctor, id=sch_id).first()
+            if not sch:
+                return Response(APIResponse.error("Schedule not found"), status=status.HTTP_404_NOT_FOUND)
+            sch.delete()
+            return Response(APIResponse.success("Schedule deleted successfully"), status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], permission_classes=[IsDoctorUser], url_path='my-slots')
     def list_my_date_slots(self, request):
@@ -164,7 +218,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
         # Auto-generate slots for the next 14 days based on weekly schedules
         import datetime
         from django.utils import timezone
-        schedules = doctor.schedules.all()
+        schedules = doctor.schedules.filter(is_active=True)
         today = timezone.localtime(timezone.now()).date()
 
         for i in range(15):
@@ -183,10 +237,47 @@ class DoctorViewSet(viewsets.ModelViewSet):
                     )
                     
         # Return all doctor slots ordered by date
-        from django.db.models import F
-        date_slots = DoctorDateSlot.objects.filter(schedule__doctor=doctor, date__gte=today).order_by('date', 'schedule__start')
+        date_slots = DoctorDateSlot.objects.filter(
+            schedule__doctor=doctor, date__gte=today
+        ).select_related(
+            'schedule', 'schedule__practice_location', 'schedule__hospital'
+        ).prefetch_related('bookings').order_by('date', 'schedule__start')
         serializer = DoctorDateSlotSerializer(date_slots, many=True)
         return Response(APIResponse.success("Upcoming slots retrieved", "slots", serializer.data))
+
+    @action(detail=False, methods=['post'], permission_classes=[IsDoctorUser], url_path='toggle-slot-status')
+    def toggle_slot_status(self, request):
+        slot_id = request.data.get('slot_id')
+        new_status = request.data.get('status')
+        confirm_override = request.data.get('confirm') == True
+        
+        if not slot_id or not new_status:
+            return Response(APIResponse.error("slot_id and status are required"), status=status.HTTP_400_BAD_REQUEST)
+            
+        slot = DoctorDateSlot.objects.filter(id=slot_id, schedule__doctor__user=request.user).first()
+        if not slot:
+            return Response(APIResponse.error("Slot not found"), status=status.HTTP_404_NOT_FOUND)
+
+        if new_status in ['paused', 'cancelled'] and slot.status == 'open':
+            active_bookings = slot.bookings.filter(status__in=['pending', 'confirmed'])
+            if active_bookings.exists() and not confirm_override:
+                return Response({
+                    "status": False,
+                    "code": "HAS_ACTIVE_APPOINTMENTS",
+                    "message": f"This session has {active_bookings.count()} active patient appointments. Are you sure you want to pause/cancel it?",
+                    "count": active_bookings.count()
+                }, status=status.HTTP_200_OK)
+                
+            if active_bookings.exists() and confirm_override:
+                for b in active_bookings:
+                    b.status = 'cancelled_by_doctor';
+                    b.save()
+        
+        slot.status = new_status
+        slot.is_approved = (new_status == 'open')
+        slot.save()
+        
+        return Response(APIResponse.success("Slot status updated successfully", "slot", DoctorDateSlotSerializer(slot).data))
 
     @action(detail=False, methods=['post'], permission_classes=[IsDoctorUser], url_path='toggle-slot')
     def toggle_slot_approval(self, request):
@@ -211,11 +302,34 @@ class DoctorViewSet(viewsets.ModelViewSet):
         slots = DoctorDateSlot.objects.filter(
             schedule__doctor=doctor,
             date__gte=today,
+            status="open",
             is_approved=True,
             bookings_count__lt=F('max_patients')
         ).order_by('date', 'schedule__start')
         serializer = DoctorDateSlotSerializer(slots, many=True)
         return Response(APIResponse.success("Available slots retrieved", "slots", serializer.data))
+
+
+class PracticeLocationViewSet(viewsets.ModelViewSet):
+    serializer_class = PracticeLocationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        doctor_id = self.request.query_params.get("doctor")
+        if doctor_id:
+            return PracticeLocation.objects.filter(doctor_id=doctor_id, is_active=True)
+            
+        try:
+            from profiles.models import Doctor
+            doctor = Doctor.objects.get(user=self.request.user)
+            return PracticeLocation.objects.filter(doctor=doctor)
+        except Doctor.DoesNotExist:
+            return PracticeLocation.objects.filter(is_active=True)
+
+    def perform_create(self, serializer):
+        from profiles.models import Doctor
+        doctor = Doctor.objects.get(user=self.request.user)
+        serializer.save(doctor=doctor)
 
 
 class DoctorRatingViewSet(viewsets.ModelViewSet):

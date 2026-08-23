@@ -2,6 +2,7 @@ from rest_framework import serializers
 from authentication.serializer import UserSerializer
 from location.models import Division, District, Upozila, Union
 from profiles.models import (
+    PracticeLocation,
     RegularUserProfile,
     Doctor,
     DoctorDetails,
@@ -56,6 +57,7 @@ class SpecializationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Specialization
         fields = '__all__'
+        ref_name = 'ProfilesSpecialization'
 
 
 class SubSpecializationSerializer(serializers.ModelSerializer):
@@ -111,8 +113,16 @@ class DoctorWorkingExperienceSerializer(serializers.ModelSerializer):
         read_only_fields = ['doctor']
 
 
+class PracticeLocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PracticeLocation
+        fields = "__all__"
+        read_only_fields = ["doctor", "created_at", "updated_at"]
+
+
 class DoctorSchedulingSerializer(serializers.ModelSerializer):
     hospital_name = serializers.ReadOnlyField(source='hospital.name_eng')
+    practice_location_detail = PracticeLocationSerializer(source='practice_location', read_only=True)
 
     class Meta:
         model = DoctorScheduling
@@ -120,11 +130,20 @@ class DoctorSchedulingSerializer(serializers.ModelSerializer):
         read_only_fields = ['doctor']
 
 
+class SlotBookingSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorBooking
+        fields = ['id', 'patient_name', 'contact_number', 'problem_description', 'status', 'appointment_number']
+
+
 class DoctorDateSlotSerializer(serializers.ModelSerializer):
     doctor_name = serializers.ReadOnlyField(source='schedule.doctor.__str__')
     start_time = serializers.ReadOnlyField(source='schedule.start')
     end_time = serializers.ReadOnlyField(source='schedule.end')
     hospital_name = serializers.ReadOnlyField(source='schedule.hospital.name_eng')
+    practice_location_name = serializers.ReadOnlyField(source='schedule.practice_location.name')
+    practice_location_detail = PracticeLocationSerializer(source='schedule.practice_location', read_only=True)
+    bookings = SlotBookingSummarySerializer(many=True, read_only=True)
 
     class Meta:
         model = DoctorDateSlot
@@ -153,6 +172,7 @@ class DoctorBookingSerializer(serializers.ModelSerializer):
     doctor_name = serializers.ReadOnlyField(source='doctor.__str__')
     user_email = serializers.ReadOnlyField(source='user.email')
     date_slot_detail = DoctorDateSlotSerializer(source='date_slot', read_only=True)
+    practice_location_detail = PracticeLocationSerializer(source='practice_location', read_only=True)
 
     class Meta:
         model = DoctorBooking
@@ -172,6 +192,8 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
     experiences = DoctorWorkingExperienceSerializer(many=True, read_only=True)
     schedules = DoctorSchedulingSerializer(many=True, read_only=True)
     evaluation = DoctorStatsSerializer(read_only=True)
+    ratings = DoctorRatingSerializer(many=True, read_only=True)
+    practice_locations = PracticeLocationSerializer(many=True, read_only=True)
 
     division_name = serializers.ReadOnlyField(source='division.division_name_eng')
     district_name = serializers.ReadOnlyField(source='district.district_name_eng')
@@ -192,6 +214,7 @@ class BloodDonationPostSerializer(serializers.ModelSerializer):
         model = BloodDonationPost
         fields = '__all__'
         read_only_fields = ['donor', 'created']
+        ref_name = 'ProfilesBloodDonationPost'
 
 
 class BloodDonorProfileSerializer(serializers.ModelSerializer):

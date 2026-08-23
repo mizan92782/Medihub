@@ -20,7 +20,8 @@ class Command(BaseCommand):
             data = json.load(f)
 
         for item in data:
-            user, _ = User.objects.get_or_create(email=item['email'])
+            user, _ = User.objects.get_or_create(email=item['email'], defaults={'user_type': 'diagnostic'})
+            user.user_type = 'diagnostic'
             user.set_password(item['password'])
             user.save()
 
