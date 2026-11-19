@@ -351,10 +351,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.AllowAny",
     ),
-    "DEFAULT_THROTTLE_CLASSES": (
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
-    ),
+    "DEFAULT_THROTTLE_CLASSES": [],
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
@@ -587,17 +584,18 @@ Used for:
   - Real-time alerts and messaging
   - Device token management
 """
-FIREBASE_CREDENTIALS_PATH = config("FIREBASE_CREDENTIALS_PATH", default="firebase-key.json")
+FIREBASE_CREDENTIALS_PATH = config("FIREBASE_CREDENTIALS_PATH", default=str(BASE_DIR / "firebase-key.json"))
 
 if os.path.exists(FIREBASE_CREDENTIALS_PATH):
     try:
         import firebase_admin
         from firebase_admin import credentials as fb_credentials
-        
-        _cred = fb_credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
-        firebase_admin.initialize_app(_cred)
+
+        if not firebase_admin._apps:
+            _cred = fb_credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
+            firebase_admin.initialize_app(_cred)
         print("🔥 FIREBASE: Push notifications initialized successfully")
-        
+
     except Exception as e:
         print(f"❌ FIREBASE: Initialization failed — {str(e)[:60]}")
 else:
@@ -651,7 +649,7 @@ LOGGING = {
             "backupCount": 10,              # keep last 10 files = 100 MB max
             "encoding": "utf-8",
         },
-        "error_file": {
+         "error_file": {
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "json",
             "filters": ["request_id"],

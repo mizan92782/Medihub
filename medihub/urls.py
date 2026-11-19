@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.urls import path, include
 from medihub.health_check import HealthCheck
 from medihub.queue_dashboard import queue_dashboard, TeshMessageQuee
-from medihub.views import AdminDashboardStatsView, serve_dashboard
+from medihub.views import AdminDashboardStatsView, PublicStatsView, serve_dashboard
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from rest_framework import permissions
@@ -33,6 +33,7 @@ def serve_sw(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('admin/dashboard-stats/', AdminDashboardStatsView.as_view(), name='admin-dashboard-stats'),
+    path('stats/', PublicStatsView.as_view(), name='public-stats'),
     path('dashboard/', serve_dashboard, name='dashboard'),
     path('firebase-messaging-sw.js', serve_sw),
     path('', HealthCheck),

@@ -16,6 +16,19 @@ from post.models.general_post_mod import GeneralPost
 from blog.models import BlogPost
 
 
+class PublicStatsView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        stats = {
+            'doctors': Doctor.objects.count(),
+            'blood_donors': BloodDonor.objects.count(),
+            'ambulances': AmbulanceProfile.objects.count(),
+            'diagnostics': DiagnosticProfile.objects.count(),
+        }
+        return Response(APIResponse.success("Platform stats", "stats", stats))
+
+
 class AdminDashboardStatsView(APIView):
     """
     Admin Dashboard Stats API providing aggregate platform analytics.

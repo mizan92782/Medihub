@@ -15,6 +15,8 @@ from post.models.general_post_mod import GeneralPost
 from post.models.ambulance_need_mod import AmbulanceNeedPost
 from post.models.post_interactions_mod import PostLike, PostComment, PostShare
 from profiles.models import BloodDonationPost
+from profiles.models.blood_donor_mod import BloodDonor
+from notification.servcies import AppNotificationService
 
 from post.serializers import (
     BloodNeedPostSerializer,
@@ -45,7 +47,33 @@ class BloodNeedPostViewSet(viewsets.ModelViewSet):
         return BloodNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        is_urgent = serializer.validated_data.get('urgency') in ('critical', 'high')
+        post = serializer.save(user=self.request.user, is_urgent_post=is_urgent)
+        # Fire background Celery task to notify matching donors
+        if is_urgent and post.district:
+            from post.tasks import send_urgent_blood_notifications
+            send_urgent_blood_notifications.delay(post.id)
+
+    @action(detail=False, methods=['get'], url_path='urgent', permission_classes=[AllowAny])
+    def urgent_posts(self, request):
+        posts = BloodNeedPost.objects.filter(
+            is_urgent_post=True,
+            status='open'
+        ).select_related('user', 'division', 'district', 'upozila').order_by('-created')
+        ct = ContentType.objects.get_for_model(BloodNeedPost)
+        data = []
+        for post in posts:
+            likes = PostLike.objects.filter(content_type=ct, object_id=post.id).count()
+            comments = PostComment.objects.filter(content_type=ct, object_id=post.id).count()
+            user_liked = False
+            if request.user.is_authenticated:
+                user_liked = PostLike.objects.filter(content_type=ct, object_id=post.id, user=request.user).exists()
+            item = BloodNeedPostSerializer(post).data
+            item['likes_count'] = likes
+            item['comments_count'] = comments
+            item['user_has_liked'] = user_liked
+            data.append(item)
+        return Response(APIResponse.success("Urgent blood posts", "posts", data))
 
     @action(detail=True, methods=['post'], url_path='fulfill')
     def mark_fulfilled(self, request, pk=None):
@@ -294,7 +322,10 @@ class PostFeedViewSet(viewsets.ViewSet):
 
     def list(self, request):
         user = request.user
-        
+        search = request.query_params.get('search', '').strip().lower()
+        post_type_filter = request.query_params.get('post_type', 'all')
+        sort_by = request.query_params.get('sort', 'newest')  # newest | oldest | most_liked | most_commented | urgent
+
         # 1. Fetch all posts
         blood_needs = BloodNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
         med_needs = MedicineNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
@@ -302,21 +333,22 @@ class PostFeedViewSet(viewsets.ViewSet):
         generals = GeneralPost.objects.select_related('user', 'division', 'district', 'upozila').all()
         amb_needs = AmbulanceNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
         donations = BloodDonationPost.objects.select_related('donor__user', 'division', 'district', 'upozila').all()
-        
+
         feed_items = []
-        
-        # Helper to format items
+
         def add_items(queryset, post_type, serializer_class):
+            if post_type_filter != 'all' and post_type_filter != post_type:
+                return
             ct = ContentType.objects.get_for_model(queryset.model)
             for post in queryset:
                 likes = PostLike.objects.filter(content_type=ct, object_id=post.id)
                 comments_count = PostComment.objects.filter(content_type=ct, object_id=post.id).count()
                 shares_count = PostShare.objects.filter(content_type=ct, object_id=post.id).count()
-                
+
                 user_has_liked = False
                 if user.is_authenticated:
                     user_has_liked = likes.filter(user=user).exists()
-                
+
                 email = ""
                 user_id = None
                 author_user = None
@@ -334,30 +366,55 @@ class PostFeedViewSet(viewsets.ViewSet):
                 author_name = email.split("@")[0] if email else "User"
                 author_avatar = None
                 if author_user:
-                    if hasattr(author_user, 'profile') and author_user.profile:
-                        prof = author_user.profile
-                        author_name = f"{prof.first_name} {prof.last_name}"
-                        author_avatar = prof.profile_dp.url if prof.profile_dp else None
-                    elif hasattr(author_user, 'doctor') and author_user.doctor:
-                        doc = author_user.doctor
-                        author_name = f"Dr. {doc.first_name} {doc.last_name}"
-                        author_avatar = doc.profile_dp.url if doc.profile_dp else None
-                    elif hasattr(author_user, 'blood_donor') and author_user.blood_donor:
-                        donor = author_user.blood_donor
-                        author_name = f"{donor.first_name} {donor.last_name}"
-                        author_avatar = donor.profile_dp.url if donor.profile_dp else None
-                    elif hasattr(author_user, 'ambulance') and author_user.ambulance:
-                        amb = author_user.ambulance
-                        author_name = amb.owner_name
-                        author_avatar = amb.profile_dp.url if amb.profile_dp else None
-                    elif hasattr(author_user, 'pharmacy') and author_user.pharmacy:
-                        ph = author_user.pharmacy
-                        author_name = ph.pharmacy_name
-                        author_avatar = ph.profile_dp.url if ph.profile_dp else None
-                    elif hasattr(author_user, 'diagnostic') and author_user.diagnostic:
-                        dg = author_user.diagnostic
-                        author_name = dg.diagnostic_name
-                        author_avatar = dg.profile_dp.url if dg.profile_dp else None
+                    try:
+                        if hasattr(author_user, 'profile') and author_user.profile:
+                            prof = author_user.profile
+                            author_name = f"{prof.first_name} {prof.last_name}".strip() or author_name
+                            author_avatar = prof.profile_dp.url if prof.profile_dp else None
+                        elif hasattr(author_user, 'doctor') and author_user.doctor:
+                            doc = author_user.doctor
+                            author_name = f"Dr. {doc.first_name} {doc.last_name}".strip()
+                            author_avatar = doc.profile_dp.url if doc.profile_dp else None
+                        elif hasattr(author_user, 'blood_donor') and author_user.blood_donor:
+                            donor = author_user.blood_donor
+                            author_name = f"{donor.first_name} {donor.last_name}".strip() or author_name
+                            author_avatar = donor.profile_dp.url if donor.profile_dp else None
+                        elif hasattr(author_user, 'ambulance') and author_user.ambulance:
+                            amb = author_user.ambulance
+                            author_name = amb.owner_name or author_name
+                            author_avatar = amb.profile_dp.url if amb.profile_dp else None
+                        elif hasattr(author_user, 'pharmacy') and author_user.pharmacy:
+                            ph = author_user.pharmacy
+                            author_name = ph.pharmacy_name or author_name
+                            author_avatar = ph.profile_dp.url if ph.profile_dp else None
+                        elif hasattr(author_user, 'diagnostic') and author_user.diagnostic:
+                            dg = author_user.diagnostic
+                            author_name = dg.diagnostic_name or author_name
+                            author_avatar = dg.profile_dp.url if dg.profile_dp else None
+                    except Exception:
+                        pass
+
+                details_data = serializer_class(post).data
+                likes_count = likes.count()
+
+                # Server-side search filter
+                if search:
+                    searchable = " ".join([
+                        str(email),
+                        str(author_name),
+                        str(details_data.get('patient_name', '')),
+                        str(details_data.get('medicine_name', '')),
+                        str(details_data.get('equipment_name', '')),
+                        str(details_data.get('title', '')),
+                        str(details_data.get('content', '')),
+                        str(details_data.get('blood_group', '')),
+                        str(details_data.get('hospital_name', '')),
+                        str(details_data.get('description', '')),
+                        str(post.district.district_name_eng if post.district else ''),
+                        str(post.division.division_name_eng if post.division else ''),
+                    ]).lower()
+                    if search not in searchable:
+                        continue
 
                 feed_items.append({
                     "id": post.id,
@@ -372,11 +429,11 @@ class PostFeedViewSet(viewsets.ViewSet):
                     "division_name": post.division.division_name_eng if post.division else None,
                     "district_name": post.district.district_name_eng if post.district else None,
                     "upozila_name": post.upozila.upozila_name_eng if post.upozila else None,
-                    "likes_count": likes.count(),
+                    "likes_count": likes_count,
                     "comments_count": comments_count,
                     "shares_count": shares_count,
                     "user_has_liked": user_has_liked,
-                    "details": serializer_class(post).data
+                    "details": details_data,
                 })
 
         add_items(blood_needs, 'blood_need', BloodNeedPostSerializer)
@@ -385,8 +442,21 @@ class PostFeedViewSet(viewsets.ViewSet):
         add_items(generals, 'general', GeneralPostSerializer)
         add_items(amb_needs, 'ambulance_need', AmbulanceNeedPostSerializer)
         add_items(donations, 'blood_donation', BloodDonationPostSerializer)
-        
-        # Sort by created desc
-        feed_items.sort(key=lambda x: x['created'], reverse=True)
-        
+
+        URGENCY_ORDER = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+
+        if sort_by == 'oldest':
+            feed_items.sort(key=lambda x: x['created'].timestamp() if hasattr(x['created'], 'timestamp') else 0)
+        elif sort_by == 'most_liked':
+            feed_items.sort(key=lambda x: x['likes_count'], reverse=True)
+        elif sort_by == 'most_commented':
+            feed_items.sort(key=lambda x: x['comments_count'], reverse=True)
+        elif sort_by == 'urgent':
+            feed_items.sort(key=lambda x: (
+                URGENCY_ORDER.get(str(x.get('urgency', 'medium')).lower(), 2),
+                -x['created'].timestamp() if hasattr(x['created'], 'timestamp') else 0
+            ))
+        else:  # newest (default)
+            feed_items.sort(key=lambda x: -x['created'].timestamp() if hasattr(x['created'], 'timestamp') else 0)
+
         return Response(APIResponse.success("Feed loaded successfully", "feed", feed_items))

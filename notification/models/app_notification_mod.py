@@ -13,6 +13,8 @@ class AppNotification(models.Model):
     title = models.CharField(max_length=255)
     message = models.TextField()
     is_read = models.BooleanField(default=False)
+    post_id = models.PositiveIntegerField(null=True, blank=True)
+    post_type = models.CharField(max_length=30, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

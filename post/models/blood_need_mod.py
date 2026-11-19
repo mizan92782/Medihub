@@ -30,6 +30,7 @@ class BloodNeedPost(models.Model):
     contact_number = models.CharField(max_length=15)
 
     urgency = models.CharField(max_length=10, choices=UrgencyChoices.choices, default=UrgencyChoices.HIGH)
+    is_urgent_post = models.BooleanField(default=False)
     description = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=15, choices=PostStatusChoices.choices, default=PostStatusChoices.OPEN)
 

@@ -7,12 +7,14 @@ logger = logging.getLogger(__name__)
 '''app notification -2 : Write services to creae notification'''
 class AppNotificationService:
     @staticmethod
-    def create_notification(user, title="Undefined", message="Undefined"):
+    def create_notification(user, title="Undefined", message="Undefined", post_id=None, post_type=None):
         try:
             notification = AppNotification.objects.create(
                 user=user,
                 title=title,
-                message=message
+                message=message,
+                post_id=post_id,
+                post_type=post_type,
             )
 
             
