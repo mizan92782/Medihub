@@ -35,12 +35,7 @@ ALLOWED_HOSTS = config(
     cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
 
-# Patch Django's host validation to allow underscored Docker container names
-if DEBUG and not PRODUCTION:
-    ALLOWED_HOSTS = ["*"]
-    from django.utils.http import is_same_domain
-    import django.http.request as _req
-    _req.validate_host = lambda host, allowed_hosts: True
+# For local Docker development, add container names to ALLOWED_HOSTS via env var
 
 print(f"🔧 CORE SETTINGS: PRODUCTION={PRODUCTION}, DEBUG={DEBUG}")
 print(f"🔧 ALLOWED_HOSTS: {ALLOWED_HOSTS}")
@@ -239,7 +234,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": config("POSTGRES_DB", default=config("DB_NAME", default="medihub_db")),
         "USER": config("POSTGRES_USER", default=config("DB_USER", default="postgres")),
-        "PASSWORD": config("POSTGRES_PASSWORD", default=config("DB_PASSWORD", default="postgres999")),
+        "PASSWORD": config("POSTGRES_PASSWORD", default=config("DB_PASSWORD")),
         "HOST": os.environ.get("DB_HOST", config("DB_HOST", default="127.0.0.1")),
         "PORT": config("DB_PORT", default="5432"),
     }
@@ -501,9 +496,9 @@ EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.smtp.
 EMAIL_HOST = config("EMAIL_HOST", default=config("SMTP_HOST", default="smtp.gmail.com"))
 EMAIL_PORT = config("EMAIL_PORT", default=config("SMTP_PORT", default=587, cast=int), cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
-EMAIL_HOST_USER = config("EMAIL_HOST_USER", default=config("SMTP_USER", default="mizanmd92782@gmail.com"))
-EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default=config("SMTP_PASSWORD", default="osqimgqfaoqcijtq"))
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=config("SMTP_FROM", default="Medihub Bangladesh <mizanmd92782@gmail.com>"))
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default=config("SMTP_USER", default=""))
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default=config("SMTP_PASSWORD", default=""))
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=config("SMTP_FROM", default="Medihub Bangladesh"))
 OTP_EXPIRE_TIME = config("OTP_EXPIRE_TIME", default=300, cast=int)
 
 print(f"📧 EMAIL: Backend={EMAIL_BACKEND.split('.')[-2]}, OTP expires in {OTP_EXPIRE_TIME}s")

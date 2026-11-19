@@ -11,6 +11,10 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
+from django.conf import settings as _settings
+_swagger_public = _settings.DEBUG
+_swagger_perms = [permissions.AllowAny] if _swagger_public else [permissions.IsAdminUser]
+
 schema_view = get_schema_view(
     openapi.Info(
         title='Medihub API',
@@ -18,8 +22,8 @@ schema_view = get_schema_view(
         description='Medihub platform API documentation',
         contact=openapi.Contact(email='admin@medihub.com'),
     ),
-    public=True,
-    permission_classes=[permissions.AllowAny],
+    public=_swagger_public,
+    permission_classes=_swagger_perms,
 )
 
 def serve_sw(request):
