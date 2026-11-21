@@ -1,7 +1,8 @@
 import json
 from django.conf import settings
 from authentication.models import User
-from post.models import BloodNeedPost, MedicineNeedPost, EquipmentNeedPost, GeneralPost
+from post.models import BloodNeedPost, MedicineNeedPost, EquipmentNeedPost, EquipmentSellPost, MedicinePost, GeneralPost, AmbulanceNeedPost
+from profiles.models.blood_donor_mod import BloodDonationPost
 from blog.models import BlogPost
 from blog.models.blog_media_mod import BlogMedia
 from blog.models.blog_like_mod import BlogLike
@@ -179,3 +180,82 @@ for item in gen_data:
         status=item['status'],
     )
 print("Seeded GeneralPost:", GeneralPost.objects.count())
+
+# 6. Seed Ambulance Need Posts
+AmbulanceNeedPost.objects.all().delete()
+user = User.objects.first()
+div = Division.objects.first()
+dist = District.objects.first()
+upz = Upozila.objects.first()
+if user and div and dist:
+    AmbulanceNeedPost.objects.create(
+        user=user,
+        ambulance_type='icu',
+        division=div,
+        district=dist,
+        upozila=upz,
+        address='House 7, Mirpur-10, Dhaka',
+        contact_number='01811000010',
+        needed_date='2025-08-01',
+        needed_time='10:00:00',
+        urgency='critical',
+        description='ICU ambulance needed urgently for cardiac patient transfer from Mirpur to NICVD.',
+        status='open',
+    )
+print("Seeded AmbulanceNeedPost:", AmbulanceNeedPost.objects.count())
+
+# 7. Seed Equipment Sell Posts
+EquipmentSellPost.objects.all().delete()
+eq_sell_data = []
+with open(settings.BASE_DIR / 'dataset' / 'equipment_sell_post.json', 'r', encoding='utf-8') as f:
+    eq_sell_data = json.load(f)
+
+for item in eq_sell_data:
+    user = get_user_by_pattern(item['user'])
+    if not user:
+        continue
+    loc = get_location(item)
+    EquipmentSellPost.objects.create(
+        user=user,
+        equipment_name=item['equipment_name'],
+        quantity=item['quantity'],
+        condition=item['condition'],
+        price=item.get('price'),
+        description=item.get('description'),
+        division=loc['division'],
+        district=loc['district'],
+        upozila=loc['upozila'],
+        address=item.get('address'),
+        contact_number=item['contact_number'],
+        status=item['status'],
+    )
+print("Seeded EquipmentSellPost:", EquipmentSellPost.objects.count())
+
+# 8. Seed Medicine Posts (buy/sell)
+MedicinePost.objects.all().delete()
+med_post_data = []
+with open(settings.BASE_DIR / 'dataset' / 'medicine_post.json', 'r', encoding='utf-8') as f:
+    med_post_data = json.load(f)
+
+for item in med_post_data:
+    user = get_user_by_pattern(item['user'])
+    if not user:
+        continue
+    loc = get_location(item)
+    MedicinePost.objects.create(
+        user=user,
+        listing_type=item.get('listing_type', 'buy'),
+        medicine_name=item['medicine_name'],
+        quantity=item['quantity'],
+        price=item.get('price'),
+        description=item.get('description'),
+        division=loc['division'],
+        district=loc['district'],
+        upozila=loc['upozila'],
+        address=item.get('address'),
+        contact_number=item['contact_number'],
+        status=item['status'],
+    )
+print("Seeded MedicinePost:", MedicinePost.objects.count())
+
+print("\n✅ All community posts seeded successfully!")

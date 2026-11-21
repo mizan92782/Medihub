@@ -89,7 +89,14 @@ class PostTypeChoices(models.TextChoices):
     BLOOD_NEED = 'blood_need', 'Blood Need'
     MEDICINE_NEED = 'medicine_need', 'Medicine Need'
     EQUIPMENT_NEED = 'equipment_need', 'Equipment Need'
+    EQUIPMENT_SELL = 'equipment_sell', 'Equipment Sell'
+    MEDICINE_SELL = 'medicine_sell', 'Medicine Sell'
     GENERAL = 'general', 'General'
+
+
+class MedicineListingTypeChoices(models.TextChoices):
+    BUY = 'buy', 'Want to Buy'
+    SELL = 'sell', 'Want to Sell'
 
 
 class UrgencyChoices(models.TextChoices):

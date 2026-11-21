@@ -21,3 +21,11 @@ class CacheKeys:
             f":dis_{district or 'all'}"
             f":spec_{specialization or 'all'}"
         )
+
+    @staticmethod
+    def DoctorProfile(doctor_id):
+        return f"doctor:{CacheKeys.VERSION}:{doctor_id}:profile"
+
+    @staticmethod
+    def DoctorTab(doctor_id, tab):
+        return f"doctor:{CacheKeys.VERSION}:{doctor_id}:tab:{tab}"

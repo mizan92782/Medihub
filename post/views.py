@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.contenttypes.models import ContentType
 
@@ -11,9 +12,12 @@ from core.permissions import IsOwnerOrReadOnly
 from post.models.blood_need_mod import BloodNeedPost
 from post.models.medicine_need_mod import MedicineNeedPost
 from post.models.equipment_need_mod import EquipmentNeedPost
+from post.models.equipment_sell_mod import EquipmentSellPost
+from post.models.medicine_post_mod import MedicinePost
 from post.models.general_post_mod import GeneralPost
 from post.models.ambulance_need_mod import AmbulanceNeedPost
 from post.models.post_interactions_mod import PostLike, PostComment, PostShare
+from post.models.post_image_mod import PostImage
 from profiles.models import BloodDonationPost
 from profiles.models.blood_donor_mod import BloodDonor
 from notification.servcies import AppNotificationService
@@ -22,13 +26,50 @@ from post.serializers import (
     BloodNeedPostSerializer,
     MedicineNeedPostSerializer,
     EquipmentNeedPostSerializer,
+    EquipmentSellPostSerializer,
+    MedicinePostSerializer,
     GeneralPostSerializer,
     AmbulanceNeedPostSerializer,
     PostLikeSerializer,
     PostCommentSerializer,
     PostShareSerializer,
+    PostImageSerializer,
 )
 from donor.serializers import BloodDonationPostSerializer
+
+
+def _notify_followers_new_post(author, post_type, post_id, summary):
+    """Send in-app + push notification to all followers of author when they create a post."""
+    try:
+        from interactions.models.user_follow import UserFollow
+        from notification.servcies import AppNotificationService, PushNotification
+        followers = UserFollow.objects.filter(following=author).select_related('follower')
+        author_name = author.email.split('@')[0]
+        try:
+            if hasattr(author, 'doctor') and author.doctor:
+                d = author.doctor
+                author_name = f"Dr. {d.first_name} {d.last_name}".strip() or author_name
+            elif hasattr(author, 'profile') and author.profile:
+                p = author.profile
+                author_name = f"{p.first_name} {p.last_name}".strip() or author_name
+            elif hasattr(author, 'blood_donor') and author.blood_donor:
+                d = author.blood_donor
+                author_name = f"{d.first_name} {d.last_name}".strip() or author_name
+        except Exception:
+            pass
+        title = f"{author_name} posted something new"
+        message = f"{author_name}: {summary}"
+        for follow in followers:
+            AppNotificationService.create_notification(
+                user=follow.follower,
+                title=title,
+                message=message,
+                post_id=post_id,
+                post_type=post_type,
+            )
+            PushNotification.send_to_user(follow.follower, title, message)
+    except Exception:
+        pass
 
 
 class BloodNeedPostViewSet(viewsets.ModelViewSet):
@@ -49,10 +90,10 @@ class BloodNeedPostViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         is_urgent = serializer.validated_data.get('urgency') in ('critical', 'high')
         post = serializer.save(user=self.request.user, is_urgent_post=is_urgent)
-        # Fire background Celery task to notify matching donors
         if is_urgent and post.district:
             from post.tasks import send_urgent_blood_notifications
             send_urgent_blood_notifications.delay(post.id)
+        _notify_followers_new_post(self.request.user, 'blood_need', post.id, f"Blood Need: {post.blood_group}")
 
     @action(detail=False, methods=['get'], url_path='urgent', permission_classes=[AllowAny])
     def urgent_posts(self, request):
@@ -106,7 +147,8 @@ class MedicineNeedPostViewSet(viewsets.ModelViewSet):
         return MedicineNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        post = serializer.save(user=self.request.user)
+        _notify_followers_new_post(self.request.user, 'medicine_need', post.id, f"Medicine Need: {post.medicine_name}")
 
     @action(detail=True, methods=['post'], url_path='fulfill')
     def mark_fulfilled(self, request, pk=None):
@@ -139,7 +181,8 @@ class EquipmentNeedPostViewSet(viewsets.ModelViewSet):
         return EquipmentNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        post = serializer.save(user=self.request.user)
+        _notify_followers_new_post(self.request.user, 'equipment_need', post.id, f"Equipment Need: {post.equipment_name}")
 
     @action(detail=True, methods=['post'], url_path='fulfill')
     def mark_fulfilled(self, request, pk=None):
@@ -172,7 +215,8 @@ class GeneralPostViewSet(viewsets.ModelViewSet):
         return GeneralPost.objects.select_related('user', 'division', 'district', 'upozila').all()
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        post = serializer.save(user=self.request.user)
+        _notify_followers_new_post(self.request.user, 'general', post.id, post.title)
 
     @action(detail=True, methods=['post'], url_path='fulfill')
     def mark_fulfilled(self, request, pk=None):
@@ -205,7 +249,8 @@ class AmbulanceNeedPostViewSet(viewsets.ModelViewSet):
         return AmbulanceNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        post = serializer.save(user=self.request.user)
+        _notify_followers_new_post(self.request.user, 'ambulance_need', post.id, f"Ambulance Need: {post.ambulance_type}")
 
     @action(detail=True, methods=['post'], url_path='fulfill')
     def mark_fulfilled(self, request, pk=None):
@@ -222,6 +267,80 @@ class AmbulanceNeedPostViewSet(viewsets.ModelViewSet):
         return Response(APIResponse.success("Post marked as closed", "post", self.get_serializer(post).data))
 
 
+class EquipmentSellPostViewSet(viewsets.ModelViewSet):
+    serializer_class = EquipmentSellPostSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['condition', 'status', 'division', 'district', 'upozila']
+    search_fields = ['equipment_name', 'description', 'address']
+    ordering_fields = ['created']
+
+    def get_queryset(self):
+        return EquipmentSellPost.objects.select_related('user', 'division', 'district', 'upozila').all()
+
+    def perform_create(self, serializer):
+        post = serializer.save(user=self.request.user)
+        _notify_followers_new_post(self.request.user, 'equipment_sell', post.id, f"Equipment Sell: {post.equipment_name}")
+
+
+class MedicinePostViewSet(viewsets.ModelViewSet):
+    serializer_class = MedicinePostSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['listing_type', 'status', 'division', 'district', 'upozila']
+    search_fields = ['medicine_name', 'description', 'address']
+    ordering_fields = ['created']
+
+    def get_queryset(self):
+        return MedicinePost.objects.select_related('user', 'division', 'district', 'upozila').all()
+
+    def perform_create(self, serializer):
+        post = serializer.save(user=self.request.user)
+        _notify_followers_new_post(self.request.user, 'medicine', post.id, f"Medicine: {post.medicine_name}")
+
+
+class PostImageUploadView(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @action(detail=False, methods=['post'], url_path='upload')
+    def upload_images(self, request):
+        post_type = request.data.get('post_type')
+        post_id = request.data.get('post_id')
+        images = request.FILES.getlist('images')
+
+        if not post_type or not post_id or not images:
+            return Response(APIResponse.error('post_type, post_id, and images are required'), status=400)
+
+        model_map = {
+            'blood_need': BloodNeedPost,
+            'medicine_need': MedicineNeedPost,
+            'equipment_need': EquipmentNeedPost,
+            'equipment_sell': EquipmentSellPost,
+            'medicine': MedicinePost,
+            'ambulance_need': AmbulanceNeedPost,
+            'general': GeneralPost,
+            'blood_donation': BloodDonationPost,
+        }
+        model_class = model_map.get(post_type)
+        if not model_class:
+            return Response(APIResponse.error('Invalid post_type'), status=400)
+
+        post_instance = model_class.objects.filter(id=post_id).first()
+        if not post_instance:
+            return Response(APIResponse.error('Post not found'), status=404)
+
+        ct = ContentType.objects.get_for_model(model_class)
+        created_images = []
+        for i, img in enumerate(images):
+            pi = PostImage.objects.create(content_type=ct, object_id=post_id, image=img, order=i)
+            created_images.append(PostImageSerializer(pi).data)
+
+        return Response(APIResponse.success('Images uploaded', 'images', created_images))
+
+
 class PostInteractionViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
@@ -230,6 +349,8 @@ class PostInteractionViewSet(viewsets.ViewSet):
             'blood_need': (BloodNeedPost, 'bloodneedpost'),
             'medicine_need': (MedicineNeedPost, 'medicineneedpost'),
             'equipment_need': (EquipmentNeedPost, 'equipmentneedpost'),
+            'equipment_sell': (EquipmentSellPost, 'equipmentsellpost'),
+            'medicine': (MedicinePost, 'medicinepost'),
             'general': (GeneralPost, 'generalpost'),
             'ambulance_need': (AmbulanceNeedPost, 'ambulanceneedpost'),
             'blood_donation': (BloodDonationPost, 'blooddonationpost')
@@ -330,6 +451,8 @@ class PostFeedViewSet(viewsets.ViewSet):
         blood_needs = BloodNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
         med_needs = MedicineNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
         eq_needs = EquipmentNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
+        eq_sells = EquipmentSellPost.objects.select_related('user', 'division', 'district', 'upozila').all()
+        med_posts = MedicinePost.objects.select_related('user', 'division', 'district', 'upozila').all()
         generals = GeneralPost.objects.select_related('user', 'division', 'district', 'upozila').all()
         amb_needs = AmbulanceNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
         donations = BloodDonationPost.objects.select_related('donor__user', 'division', 'district', 'upozila').all()
@@ -439,6 +562,8 @@ class PostFeedViewSet(viewsets.ViewSet):
         add_items(blood_needs, 'blood_need', BloodNeedPostSerializer)
         add_items(med_needs, 'medicine_need', MedicineNeedPostSerializer)
         add_items(eq_needs, 'equipment_need', EquipmentNeedPostSerializer)
+        add_items(eq_sells, 'equipment_sell', EquipmentSellPostSerializer)
+        add_items(med_posts, 'medicine', MedicinePostSerializer)
         add_items(generals, 'general', GeneralPostSerializer)
         add_items(amb_needs, 'ambulance_need', AmbulanceNeedPostSerializer)
         add_items(donations, 'blood_donation', BloodDonationPostSerializer)

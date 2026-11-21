@@ -5,7 +5,7 @@ from core.enum import BlogMediaTypeChoices
 
 class BlogMedia(models.Model):
 
-    post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name='media')
+    post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name='media', null=True, blank=True)
     media_type = models.CharField(max_length=10, choices=BlogMediaTypeChoices.choices)
     file = models.FileField(upload_to='blog/media/')
     caption = models.CharField(max_length=300, blank=True, null=True)
@@ -15,4 +15,4 @@ class BlogMedia(models.Model):
         ordering = ['order']
 
     def __str__(self):
-        return f'{self.post.title} - {self.media_type}'
+        return f'{self.post.title if self.post else "unlinked"} - {self.media_type}'

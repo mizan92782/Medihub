@@ -1,0 +1,16 @@
+[
+  {
+    "user": "user.rahim@medihub.com",
+    "equipment_name": "Oxygen Cylinder",
+    "quantity": "1",
+    "condition": "good",
+    "price": "3500",
+    "description": "Used oxygen cylinder in good condition. Selling as patient has recovered. Comes with regulator.",
+    "division": "ঢাকা",
+    "district": "ঢাকা",
+    "upozila": "সাভার",
+    "address": "House 5, Road 3, Savar, Dhaka",
+    "contact_number": "01811000001",
+    "status": "open"
+  }
+]

@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status, filters
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
@@ -16,6 +16,19 @@ from blog.serializers import (
     BlogMediaSerializer,
 )
 from profiles.models import Doctor
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_blog_image(request):
+    file = request.FILES.get('image')
+    if not file:
+        return Response({'error': 'No image provided'}, status=400)
+    media = BlogMedia(media_type='image', order=0)
+    media.file = file
+    media.save()
+    url = request.build_absolute_uri(media.file.url)
+    return Response({'url': url})
 
 
 class BlogPostViewSet(viewsets.ModelViewSet):
@@ -55,7 +68,26 @@ class BlogPostViewSet(viewsets.ModelViewSet):
         while BlogPost.objects.filter(slug=slug).exists():
             slug = f"{original_slug}-{counter}"
             counter += 1
-        serializer.save(doctor=doctor, slug=slug)
+        blog = serializer.save(doctor=doctor, slug=slug)
+        # Notify followers
+        try:
+            from interactions.models.user_follow import UserFollow
+            from notification.servcies import AppNotificationService, PushNotification
+            author = self.request.user
+            author_name = f"Dr. {doctor.first_name} {doctor.last_name}".strip() if doctor else author.email.split('@')[0]
+            notif_title = f"{author_name} published a new article"
+            notif_msg = f"{author_name}: {blog.title}"
+            for follow in UserFollow.objects.filter(following=author).select_related('follower'):
+                AppNotificationService.create_notification(
+                    user=follow.follower,
+                    title=notif_title,
+                    message=notif_msg,
+                    post_id=blog.id,
+                    post_type='blog',
+                )
+                PushNotification.send_to_user(follow.follower, notif_title, notif_msg)
+        except Exception:
+            pass
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

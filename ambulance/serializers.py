@@ -1,10 +1,14 @@
 from rest_framework import serializers
 from profiles.models import AmbulanceProfile, AmbulanceReview
+from interactions.models.user_follow import UserFollow
 
 
 class AmbulanceProfileSerializer(serializers.ModelSerializer):
     avg_rating = serializers.SerializerMethodField()
     total_reviews = serializers.SerializerMethodField()
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
 
     class Meta:
         model = AmbulanceProfile
@@ -18,6 +22,12 @@ class AmbulanceProfileSerializer(serializers.ModelSerializer):
 
     def get_total_reviews(self, obj):
         return obj.reviews.count()
+
+    def get_followers_count(self, obj):
+        return UserFollow.objects.filter(following=obj.user).count()
+
+    def get_following_count(self, obj):
+        return UserFollow.objects.filter(follower=obj.user).count()
 
 
 class AmbulanceReviewSerializer(serializers.ModelSerializer):

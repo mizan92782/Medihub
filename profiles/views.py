@@ -6,6 +6,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
+from cache.keys import CacheKeys
+from cache.manager import CacheManager
+from cache.ttl import CacheTTL
 from core.api_response import APIResponse
 from core.pagination import StandardResultsSetPagination
 from core.permissions import (
@@ -145,6 +148,17 @@ class DoctorViewSet(viewsets.ModelViewSet):
             'user', 'specialization', 'sub_specialization', 'division', 'district', 'upozila', 'union', 'details', 'evaluation'
         ).prefetch_related('qualifications', 'hospital_affiliations', 'educations', 'experiences', 'schedules').filter(is_active=True, user__is_blocked=False)
 
+    def retrieve(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        cache_key = CacheKeys.DoctorProfile(pk)
+        cached = CacheManager.GetCache(cache_key)
+        if cached['success']:
+            return Response(APIResponse.success("Doctor profile retrieved", "doctor", cached['data']))
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        CacheManager.SetCache(cache_key, serializer.data, CacheTTL.LARGE)
+        return Response(APIResponse.success("Doctor profile retrieved", "doctor", serializer.data))
+
     @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[IsDoctorUser], url_path='me')
     def me(self, request):
         doctor = Doctor.objects.filter(user=request.user).first()
@@ -197,6 +211,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
             serializer = DoctorEducationSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(doctor=doctor)
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'education'))
             return Response(APIResponse.success("Education added", "education", serializer.data), status=status.HTTP_201_CREATED)
         elif request.method in ['PUT', 'PATCH']:
             edu_id = request.query_params.get('id') or request.data.get('id')
@@ -208,6 +223,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
             serializer = DoctorEducationSerializer(edu, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'education'))
             return Response(APIResponse.success("Education updated successfully", "education", serializer.data))
         elif request.method == 'DELETE':
             edu_id = request.query_params.get('id')
@@ -217,6 +233,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
             if not edu:
                 return Response(APIResponse.error("Education not found"), status=status.HTTP_404_NOT_FOUND)
             edu.delete()
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'education'))
             return Response(APIResponse.success("Education deleted successfully"), status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post', 'delete'], permission_classes=[IsDoctorUser], url_path='experience')
@@ -226,6 +243,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
             serializer = DoctorWorkingExperienceSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(doctor=doctor)
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'experience'))
             return Response(APIResponse.success("Experience added", "experience", serializer.data), status=status.HTTP_201_CREATED)
         elif request.method == 'DELETE':
             exp_id = request.query_params.get('id')
@@ -235,6 +253,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
             if not exp:
                 return Response(APIResponse.error("Experience not found"), status=status.HTTP_404_NOT_FOUND)
             exp.delete()
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'experience'))
             return Response(APIResponse.success("Experience deleted successfully"), status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post', 'delete'], permission_classes=[IsDoctorUser], url_path='schedule')
@@ -244,6 +263,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
             serializer = DoctorSchedulingSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(doctor=doctor)
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'schedule'))
             return Response(APIResponse.success("Schedule added", "schedule", serializer.data), status=status.HTTP_201_CREATED)
         elif request.method == 'DELETE':
             sch_id = request.query_params.get('id')
@@ -253,6 +273,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
             if not sch:
                 return Response(APIResponse.error("Schedule not found"), status=status.HTTP_404_NOT_FOUND)
             sch.delete()
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'schedule'))
             return Response(APIResponse.success("Schedule deleted successfully"), status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], permission_classes=[IsDoctorUser], url_path='my-slots')
@@ -338,6 +359,70 @@ class DoctorViewSet(viewsets.ModelViewSet):
         slot.save()
         
         return Response(APIResponse.success("Slot approval status toggled", "slot", DoctorDateSlotSerializer(slot).data))
+
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny], url_path='tab/(?P<tab_name>[^/.]+)')
+    def tab_data(self, request, pk=None, tab_name=None):
+        """
+        Returns only the data needed for a specific profile tab.
+        Cached in Redis per doctor+tab to reduce DB load.
+        Supported tabs: about, education, experience, schedule, stats
+        """
+        VALID_TABS = {'about', 'education', 'experience', 'expertise', 'practice_locations', 'affiliations', 'schedule', 'stats'}
+        if tab_name not in VALID_TABS:
+            return Response(APIResponse.error(f"Invalid tab. Choose from: {', '.join(VALID_TABS)}"), status=status.HTTP_400_BAD_REQUEST)
+
+        cache_key = CacheKeys.DoctorTab(pk, tab_name)
+        cached = CacheManager.GetCache(cache_key)
+        if cached['success']:
+            return Response(APIResponse.success(f"{tab_name} tab data retrieved", "data", cached['data']))
+
+        doctor = self.get_object()
+
+        if tab_name == 'about':
+            from profiles.serializers import HospitalSerializer
+            data = {
+                'bio': doctor.details.bio if hasattr(doctor, 'details') and doctor.details else None,
+                'language': doctor.details.language if hasattr(doctor, 'details') and doctor.details else None,
+                'website': doctor.details.website if hasattr(doctor, 'details') and doctor.details else None,
+                'license_number': doctor.license_number,
+                'hospitals_detail': HospitalSerializer(doctor.hospital_affiliations.all(), many=True).data,
+            }
+        elif tab_name == 'education':
+            from profiles.serializers import DoctorEducationSerializer
+            data = {'educations': DoctorEducationSerializer(doctor.educations.all().order_by('start_at'), many=True).data}
+        elif tab_name == 'experience':
+            from profiles.serializers import DoctorWorkingExperienceSerializer
+            data = {'experiences': DoctorWorkingExperienceSerializer(doctor.experiences.all().order_by('starting_at'), many=True).data}
+        elif tab_name == 'expertise':
+            from profiles.serializers import SpecializationSerializer, SubSpecializationSerializer, QualificationSerializer
+            data = {
+                'specialization': SpecializationSerializer(doctor.specialization).data if doctor.specialization else None,
+                'sub_specialization': SubSpecializationSerializer(doctor.sub_specialization).data if doctor.sub_specialization else None,
+                'qualifications': QualificationSerializer(doctor.qualifications.all(), many=True).data,
+                'years_of_experience': doctor.years_of_experience,
+            }
+        elif tab_name == 'practice_locations':
+            from profiles.serializers import PracticeLocationSerializer
+            data = {'practice_locations': PracticeLocationSerializer(doctor.practice_locations.filter(is_active=True), many=True).data}
+        elif tab_name == 'affiliations':
+            from profiles.serializers import HospitalSerializer, QualificationSerializer, SpecializationSerializer, SubSpecializationSerializer
+            data = {
+                'hospitals_detail': HospitalSerializer(doctor.hospital_affiliations.all(), many=True).data,
+                'qualifications_detail': QualificationSerializer(doctor.qualifications.all(), many=True).data,
+                'specialization_detail': SpecializationSerializer(doctor.specialization).data if doctor.specialization else None,
+                'sub_specialization_detail': SubSpecializationSerializer(doctor.sub_specialization).data if doctor.sub_specialization else None,
+                'license_number': doctor.license_number,
+                'years_of_experience': doctor.years_of_experience,
+            }
+        elif tab_name == 'schedule':
+            from profiles.serializers import DoctorSchedulingSerializer
+            data = {'schedules': DoctorSchedulingSerializer(doctor.schedules.filter(is_active=True), many=True).data}
+        elif tab_name == 'stats':
+            from profiles.serializers import DoctorStatsSerializer
+            data = {'evaluation': DoctorStatsSerializer(doctor.evaluation).data if hasattr(doctor, 'evaluation') and doctor.evaluation else None}
+
+        CacheManager.SetCache(cache_key, data, CacheTTL.MEDIUM)
+        return Response(APIResponse.success(f"{tab_name} tab data retrieved", "data", data))
 
     @action(detail=True, methods=['get'], permission_classes=[AllowAny], url_path='available-slots')
     def available_slots(self, request, pk=None):
