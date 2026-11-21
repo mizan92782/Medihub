@@ -297,26 +297,29 @@ class DoctorViewSet(viewsets.ModelViewSet):
         if not doctor:
             return Response(APIResponse.error("Doctor profile not found"), status=status.HTTP_404_NOT_FOUND)
         
-        # Auto-generate slots for the next 14 days based on weekly schedules
         import datetime
         from django.utils import timezone
         schedules = doctor.schedules.filter(is_active=True)
         today = timezone.localtime(timezone.now()).date()
 
-        for i in range(15):
-            target_date = today + datetime.timedelta(days=i)
-            target_weekday_name = target_date.strftime('%A').lower()
-            for sched in schedules:
-                if sched.day == target_weekday_name:
-                    # check if DateSlot already exists
+        for sched in schedules:
+            # Determine generation window from valid_from / valid_until
+            start = max(sched.valid_from, today) if sched.valid_from else today
+            end = sched.valid_until if sched.valid_until else None
+            if end is None:
+                # No end date set — do not auto-generate
+                continue
+            if end < today:
+                continue
+            current = start
+            while current <= end:
+                if current.strftime('%A').lower() == sched.day:
                     DoctorDateSlot.objects.get_or_create(
                         schedule=sched,
-                        date=target_date,
-                        defaults={
-                            'max_patients': sched.max_patients,
-                            'is_approved': True
-                        }
+                        date=current,
+                        defaults={'max_patients': sched.max_patients, 'is_approved': True}
                     )
+                current += datetime.timedelta(days=1)
                     
         # Return all doctor slots ordered by date
         date_slots = DoctorDateSlot.objects.filter(
@@ -423,18 +426,22 @@ class DoctorViewSet(viewsets.ModelViewSet):
 
             today = timezone.localtime(timezone.now()).date()
 
-            # Auto-generate slots for next 15 days
+            # Auto-generate slots only within doctor-defined valid_from/valid_until range
             schedules = doctor.schedules.filter(is_active=True)
-            for i in range(15):
-                target_date = today + datetime.timedelta(days=i)
-                day_name = target_date.strftime('%A').lower()
-                for sched in schedules:
-                    if sched.day == day_name:
+            for sched in schedules:
+                start = max(sched.valid_from, today) if sched.valid_from else today
+                end = sched.valid_until
+                if not end or end < today:
+                    continue
+                current = start
+                while current <= end:
+                    if current.strftime('%A').lower() == sched.day:
                         DoctorDateSlot.objects.get_or_create(
                             schedule=sched,
-                            date=target_date,
+                            date=current,
                             defaults={'max_patients': sched.max_patients, 'is_approved': True}
                         )
+                    current += datetime.timedelta(days=1)
 
             locations = doctor.practice_locations.filter(is_active=True)
             locations_data = list(PracticeLocationSerializer(locations, many=True).data)
