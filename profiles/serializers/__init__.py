@@ -143,6 +143,7 @@ class DoctorDateSlotSerializer(serializers.ModelSerializer):
     end_time = serializers.ReadOnlyField(source='schedule.end')
     hospital_name = serializers.ReadOnlyField(source='schedule.hospital.name_eng')
     practice_location_name = serializers.ReadOnlyField(source='schedule.practice_location.name')
+    practice_location_id = serializers.ReadOnlyField(source='schedule.practice_location_id')
     practice_location_detail = PracticeLocationSerializer(source='schedule.practice_location', read_only=True)
     bookings = SlotBookingSummarySerializer(many=True, read_only=True)
 

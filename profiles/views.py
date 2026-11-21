@@ -171,6 +171,8 @@ class DoctorViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(doctor, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(doctor.id, 'expertise'))
+            CacheManager.DeleteCache(CacheKeys.DoctorProfile(doctor.id))
             return Response(APIResponse.success("Doctor profile updated successfully", "doctor", serializer.data))
 
     @action(detail=False, methods=['post'], permission_classes=[IsDoctorUser], url_path='toggle-active')
@@ -183,6 +185,19 @@ class DoctorViewSet(viewsets.ModelViewSet):
         doctor.save(update_fields=['is_active'])
         state = 'active' if doctor.is_active else 'inactive'
         return Response(APIResponse.success(f"Profile is now {state}.", "is_active", doctor.is_active))
+
+    @action(detail=False, methods=['post'], permission_classes=[IsDoctorUser], url_path='expertise-areas')
+    def update_expertise_areas(self, request):
+        doctor = Doctor.objects.filter(user=request.user).first()
+        if not doctor:
+            return Response(APIResponse.error("Doctor profile not found"), status=status.HTTP_404_NOT_FOUND)
+        areas = request.data.get('expertise_areas', [])
+        if not isinstance(areas, list):
+            return Response(APIResponse.error("expertise_areas must be a list"), status=status.HTTP_400_BAD_REQUEST)
+        doctor.expertise_areas = areas
+        doctor.save(update_fields=['expertise_areas'])
+        CacheManager.DeleteCache(CacheKeys.DoctorTab(doctor.id, 'expertise'))
+        return Response(APIResponse.success("Expertise areas updated", "expertise_areas", doctor.expertise_areas))
 
     @action(detail=True, methods=['post'], permission_classes=[IsDoctorUser], url_path='details')
     def add_update_details(self, request, pk=None):
@@ -299,7 +314,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
                         date=target_date,
                         defaults={
                             'max_patients': sched.max_patients,
-                            'is_approved': False
+                            'is_approved': True
                         }
                     )
                     
@@ -400,10 +415,77 @@ class DoctorViewSet(viewsets.ModelViewSet):
                 'sub_specialization': SubSpecializationSerializer(doctor.sub_specialization).data if doctor.sub_specialization else None,
                 'qualifications': QualificationSerializer(doctor.qualifications.all(), many=True).data,
                 'years_of_experience': doctor.years_of_experience,
+                'expertise_areas': doctor.expertise_areas or [],
             }
         elif tab_name == 'practice_locations':
-            from profiles.serializers import PracticeLocationSerializer
-            data = {'practice_locations': PracticeLocationSerializer(doctor.practice_locations.filter(is_active=True), many=True).data}
+            import datetime
+            from django.utils import timezone
+
+            today = timezone.localtime(timezone.now()).date()
+
+            # Auto-generate slots for next 15 days
+            schedules = doctor.schedules.filter(is_active=True)
+            for i in range(15):
+                target_date = today + datetime.timedelta(days=i)
+                day_name = target_date.strftime('%A').lower()
+                for sched in schedules:
+                    if sched.day == day_name:
+                        DoctorDateSlot.objects.get_or_create(
+                            schedule=sched,
+                            date=target_date,
+                            defaults={'max_patients': sched.max_patients, 'is_approved': True}
+                        )
+
+            locations = doctor.practice_locations.filter(is_active=True)
+            locations_data = list(PracticeLocationSerializer(locations, many=True).data)
+
+            slots = DoctorDateSlot.objects.filter(
+                schedule__doctor=doctor,
+                date__gte=today,
+            ).exclude(
+                status='cancelled'
+            ).select_related(
+                'schedule', 'schedule__practice_location', 'schedule__hospital'
+            ).prefetch_related('bookings').order_by('date', 'schedule__start')
+            slots_data = DoctorDateSlotSerializer(slots, many=True).data
+
+            # Match slots to locations by practice_location FK ID first, then hospital name
+            for loc in locations_data:
+                loc_id = int(loc['id'])
+                loc_name_lower = loc['name'].lower()
+                matched = []
+                for s in slots_data:
+                    pl_id = s.get('practice_location_id')
+                    hn = (s.get('hospital_name') or '').lower()
+                    if pl_id and int(pl_id) == loc_id:
+                        matched.append(s)
+                    elif not pl_id and hn and (hn in loc_name_lower or loc_name_lower in hn):
+                        matched.append(s)
+                loc['slots'] = matched
+
+            # Slots that didn't match any location
+            matched_ids = {s['id'] for loc in locations_data for s in loc['slots']}
+            unmatched = [s for s in slots_data if s['id'] not in matched_ids]
+            if unmatched:
+                # If only one location exists, assign all unmatched slots to it
+                if len(locations_data) == 1:
+                    locations_data[0]['slots'].extend(unmatched)
+                else:
+                    locations_data.append({
+                        'id': None,
+                        'name': 'General / Other Locations',
+                        'type': 'other',
+                        'address': None,
+                        'city': None,
+                        'contact_number': None,
+                        'latitude': None,
+                        'longitude': None,
+                        'is_active': True,
+                        'slots': unmatched,
+                    })
+
+            # Don't cache — booking counts change live
+            return Response(APIResponse.success(f"{tab_name} tab data retrieved", "data", {'practice_locations': locations_data}))
         elif tab_name == 'affiliations':
             from profiles.serializers import HospitalSerializer, QualificationSerializer, SpecializationSerializer, SubSpecializationSerializer
             data = {

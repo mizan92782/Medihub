@@ -61,6 +61,7 @@ class Doctor(models.Model):
     years_of_experience = models.PositiveIntegerField(default=0)
     license_number = models.CharField(max_length=100, unique=True)
     license_validity = models.DateField()
+    expertise_areas = models.JSONField(default=list, blank=True)
 
     consultation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     address = models.TextField(blank=True, null=True)
