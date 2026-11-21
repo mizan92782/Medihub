@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.urls import path, include
 from medihub.health_check import HealthCheck
 from medihub.queue_dashboard import queue_dashboard, TeshMessageQuee
-from medihub.views import AdminDashboardStatsView, PublicStatsView, serve_dashboard
+from medihub.views import AdminDashboardStatsView, AdminUserListView, AdminTrafficStatsView, PublicStatsView, AdminLogsView, serve_dashboard
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from rest_framework import permissions
@@ -32,8 +32,13 @@ def serve_sw(request):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('admin/dashboard-stats/', AdminDashboardStatsView.as_view(), name='admin-dashboard-stats'),
+    path('api/admin/dashboard-stats/', AdminDashboardStatsView.as_view(), name='admin-dashboard-stats'),
+    path('api/admin/users/', AdminUserListView.as_view(), name='admin-users'),
+    path('api/admin/users/<int:user_id>/', AdminUserListView.as_view(), name='admin-user-detail'),
+    path('api/admin/traffic/', AdminTrafficStatsView.as_view(), name='admin-traffic'),
+    path('api/admin/logs/', AdminLogsView.as_view(), name='admin-logs'),
     path('stats/', PublicStatsView.as_view(), name='public-stats'),
+    path('api/stats/', PublicStatsView.as_view(), name='public-stats-api'),
     path('dashboard/', serve_dashboard, name='dashboard'),
     path('firebase-messaging-sw.js', serve_sw),
     path('', HealthCheck),
@@ -42,12 +47,26 @@ urlpatterns = [
     path('queue/test/', TeshMessageQuee, name='queue-test'),
     path('', include('django_prometheus.urls')),
     
-    # Core Domain App Routes
+    # Core Domain App Routes (no prefix)
     path('doctors/', include('doctor.urls')),
     path('donors/', include('donor.urls')),
     path('ambulances/', include('ambulance.urls')),
     path('pharmacies/', include('pharmacy.urls')),
     path('diagnostics/', include('diagnostic.urls')),
+
+    # API prefixed routes (used by frontend BASE_URL=/api)
+    path('api/doctors/', include('doctor.urls')),
+    path('api/donors/', include('donor.urls')),
+    path('api/ambulances/', include('ambulance.urls')),
+    path('api/pharmacies/', include('pharmacy.urls')),
+    path('api/diagnostics/', include('diagnostic.urls')),
+    path('api/authentication/', include('authentication.urls')),
+    path('api/profiles/', include('profiles.urls')),
+    path('api/posts/', include('post.urls')),
+    path('api/blogs/', include('blog.urls')),
+    path('api/notification/', include('notification.urls')),
+    path('api/interactions/', include('interactions.urls')),
+    path('api/location/', include('location.urls')),
 
     # API v1 Versioned Prefix
     path('api/v1/doctors/', include('doctor.urls')),
@@ -56,7 +75,7 @@ urlpatterns = [
     path('api/v1/pharmacies/', include('pharmacy.urls')),
     path('api/v1/diagnostics/', include('diagnostic.urls')),
 
-    # Legacy & Platform Routes
+    # Legacy & Platform Routes (no prefix)
     path('authentication/', include('authentication.urls')),
     path('profiles/', include('profiles.urls')),
     path('posts/', include('post.urls')),

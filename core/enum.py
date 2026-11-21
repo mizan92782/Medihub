@@ -49,6 +49,9 @@ class AmbulanceTypeChoices(models.TextChoices):
     BASIC = 'basic', 'Basic'
     ADVANCED = 'advanced', 'Advanced'
     ICU = 'icu', 'ICU'
+    FREEZE = 'freeze', 'Freeze / Mortuary'
+    NEONATAL = 'neonatal', 'Neonatal'
+    WATER = 'water', 'Water Ambulance'
     
 
 class BlogStatusChoices(models.TextChoices):

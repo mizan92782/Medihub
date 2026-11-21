@@ -46,6 +46,7 @@ class Doctor(models.Model):
     date_of_birth = models.DateField(blank=True, null=True)
     gender = models.CharField(max_length=10, choices=GenderChoices.choices)
     profile_dp = models.ImageField(upload_to='doctor/dp/', blank=True, null=True)
+    cover_photo = models.ImageField(upload_to='doctor/cover/', blank=True, null=True)
     contact_number = models.CharField(max_length=15)
 
     division = models.ForeignKey(Division, on_delete=models.SET_NULL, null=True)
@@ -63,6 +64,8 @@ class Doctor(models.Model):
 
     consultation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     address = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)      # user-controlled: hides profile from public
+    is_available = models.BooleanField(default=True)   # user-controlled: available for appointments
 
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)

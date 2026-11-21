@@ -205,7 +205,11 @@ class LoginService:
 
         if not user.is_active:
             logger.warning('login_failed_inactive_user', extra={'email': email})
-            return {'status': False, 'message': 'Account is inactive.'}
+            # inactive accounts can still login — they are just hidden from public listings
+
+        if getattr(user, 'is_blocked', False):
+            logger.warning('login_failed_blocked_user', extra={'email': email})
+            return {'status': False, 'message': 'Your account has been blocked by admin. Please contact support.'}
 
         if getattr(user, 'two_factor_enabled', False):
             otp     = str(random.randint(100000, 999999))
@@ -225,13 +229,14 @@ class LoginService:
             }
 
         refresh = RefreshToken.for_user(user)
-        logger.info('login_success', extra={'email': email, 'user_id': user.id, 'user_type': user.user_type})
+        effective_type = 'admin' if (user.is_staff or user.user_type == 'admin') else user.user_type
+        logger.info('login_success', extra={'email': email, 'user_id': user.id, 'user_type': effective_type})
 
         return {
             'status':        True,
             'access':        str(refresh.access_token),
             'refresh':       str(refresh),
-            'user_type':     user.user_type,
+            'user_type':     effective_type,
             'user_id':       user.id,
         }
 
@@ -254,16 +259,20 @@ class LoginService:
         try:
             user = User.objects.get(email=email)
             if not user.is_active:
-                return {'status': False, 'message': 'Account is inactive.'}
+                pass  # inactive accounts can still login
+
+            if getattr(user, 'is_blocked', False):
+                return {'status': False, 'message': 'Your account has been blocked by admin. Please contact support.'}
 
             refresh = RefreshToken.for_user(user)
             cache.delete(otp_key)
             logger.info('login_2fa_otp_verified_success', extra={'email': email})
+            effective_type = 'admin' if (user.is_staff or user.user_type == 'admin') else user.user_type
             return {
                 'status':        True,
                 'access':        str(refresh.access_token),
                 'refresh':       str(refresh),
-                'user_type':     user.user_type,
+                'user_type':     effective_type,
                 'user_id':       user.id,
             }
         except User.DoesNotExist:

@@ -201,3 +201,31 @@ class LogoutSerializer(serializers.Serializer):
 class Verify2FASerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp   = serializers.CharField(max_length=6)
+
+
+# --------------------------------------------------
+# BECOME BLOOD DONOR — authenticated user upgrade
+# --------------------------------------------------
+class BecomeBloodDonorSerializer(serializers.Serializer):
+    first_name     = serializers.CharField(max_length=100)
+    last_name      = serializers.CharField(max_length=100)
+    gender         = serializers.ChoiceField(choices=GenderChoices.choices)
+    date_of_birth  = serializers.DateField()
+    contact_number = serializers.CharField(max_length=15)
+    blood_group    = serializers.ChoiceField(choices=BloodGroupChoices.choices)
+    availability   = serializers.ChoiceField(choices=AvailabilityChoices.choices, required=False)
+    last_donated   = serializers.DateField(required=False, allow_null=True)
+    address        = serializers.CharField(required=False, allow_blank=True)
+    division       = serializers.PrimaryKeyRelatedField(queryset=Division.objects.all(), required=False, allow_null=True)
+    district       = serializers.PrimaryKeyRelatedField(queryset=District.objects.none(), required=False, allow_null=True)
+    upozila        = serializers.PrimaryKeyRelatedField(queryset=Upozila.objects.none(), required=False, allow_null=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        data = kwargs.get('data', {})
+        division_id = data.get('division')
+        if division_id:
+            self.fields['district'].queryset = District.objects.filter(division_id=division_id)
+        district_id = data.get('district')
+        if district_id:
+            self.fields['upozila'].queryset = Upozila.objects.filter(district_id=district_id)

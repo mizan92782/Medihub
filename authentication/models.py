@@ -32,6 +32,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_blood_donor = models.BooleanField(default=False)
+    is_blocked = models.BooleanField(default=False)
     two_factor_enabled = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)

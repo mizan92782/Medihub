@@ -11,12 +11,16 @@ class RegularUserProfile(models.Model):
     date_of_birth = models.DateField(blank=True, null=True)
     gender = models.CharField(max_length=10, choices=GenderChoices.choices)
     profile_dp = models.ImageField(upload_to='user/dp/', blank=True, null=True)
+    cover_photo = models.ImageField(upload_to='user/cover/', blank=True, null=True)
     contact_number = models.CharField(max_length=15, blank=True, null=True)
 
     division = models.ForeignKey(Division, on_delete=models.SET_NULL, null=True, blank=True)
     district = models.ForeignKey(District, on_delete=models.SET_NULL, null=True, blank=True)
     upozila = models.ForeignKey(Upozila, on_delete=models.SET_NULL, null=True, blank=True)
     address = models.TextField(blank=True, null=True)
+
+    is_active = models.BooleanField(default=True)      # user-controlled: hides profile from public
+    is_available = models.BooleanField(default=True)   # user-controlled: available for interaction
 
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)

@@ -12,9 +12,12 @@ class BloodDonor(models.Model):
     gender = models.CharField(max_length=10, choices=GenderChoices.choices)
     contact_number = models.CharField(max_length=15)
     profile_dp = models.ImageField(upload_to='donor/dp/', blank=True, null=True)
+    cover_photo = models.ImageField(upload_to='donor/cover/', blank=True, null=True)
 
     blood_group = models.CharField(max_length=5, choices=BloodGroupChoices.choices)
     availability = models.CharField(max_length=15, choices=AvailabilityChoices.choices, default=AvailabilityChoices.AVAILABLE)
+    is_available = models.BooleanField(default=True)   # user-controlled: donor ready to donate
+    is_active = models.BooleanField(default=True)      # user-controlled: hides profile from public
     last_donated = models.DateField(blank=True, null=True)
     lives_saved_count = models.PositiveIntegerField(default=0)
 

@@ -10,8 +10,11 @@ class PharmacyProfile(models.Model):
     contact_number = models.CharField(max_length=15)
     license_number = models.CharField(max_length=100, unique=True)
     license_validity = models.DateField()
-    is_open = models.BooleanField(default=True)
+    is_open = models.BooleanField(default=True)        # user-controlled: pharmacy open for business
+    is_active = models.BooleanField(default=True)      # user-controlled: hides profile from public
+    is_available = models.BooleanField(default=True)   # user-controlled: available for orders
     profile_dp = models.ImageField(upload_to='pharmacy/dp/', blank=True, null=True)
+    cover_photo = models.ImageField(upload_to='pharmacy/cover/', blank=True, null=True)
 
     division = models.ForeignKey(Division, on_delete=models.SET_NULL, null=True)
     district = models.ForeignKey(District, on_delete=models.SET_NULL, null=True)

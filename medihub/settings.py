@@ -35,7 +35,9 @@ ALLOWED_HOSTS = config(
     cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
 
-# For local Docker development, add container names to ALLOWED_HOSTS via env var
+# For local Docker development, allow all hosts when DEBUG is True
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
 
 print(f"🔧 CORE SETTINGS: PRODUCTION={PRODUCTION}, DEBUG={DEBUG}")
 print(f"🔧 ALLOWED_HOSTS: {ALLOWED_HOSTS}")
@@ -88,6 +90,7 @@ INSTALLED_APPS = [
 ]
 
 AUTH_USER_MODEL = "authentication.User"
+AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.AllowAllUsersModelBackend"]
 print("✅ INSTALLED APPS: Loaded all Django, third-party, and custom Medihub apps")
 
 
@@ -108,7 +111,7 @@ MIDDLEWARE: Request/response processors that run in order for every request.
 """
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
-    "request_id.middleware.RequestIdMiddleware",
+    "medihub.middleware.APIRequestLogMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -346,7 +349,7 @@ Filtering:
 """
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "authentication.backends.AllowInactiveJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.AllowAny",
@@ -625,34 +628,26 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "json": {
-            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
-            "format": "%(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s",
-        },
-    },
-    "filters": {
-        "request_id": {
-            "()": "request_id.logging.RequestIdFilter",
+            "()": "pythonjsonlogger.json.JsonFormatter",
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
         },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "json",
-            "filters": ["request_id"],
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "json",
-            "filters": ["request_id"],
             "filename": BASE_DIR / "logs" / "medihub.log",
-            "maxBytes": 1024 * 1024 * 10,  # 10 MB per file
-            "backupCount": 10,              # keep last 10 files = 100 MB max
+            "maxBytes": 1024 * 1024 * 10,
+            "backupCount": 10,
             "encoding": "utf-8",
         },
-         "error_file": {
+        "error_file": {
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "json",
-            "filters": ["request_id"],
             "filename": BASE_DIR / "logs" / "medihub_error.log",
             "maxBytes": 1024 * 1024 * 10,
             "backupCount": 10,

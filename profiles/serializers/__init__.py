@@ -84,6 +84,7 @@ class RegularUserProfileSerializer(serializers.ModelSerializer):
     division_name = serializers.ReadOnlyField(source='division.division_name_eng')
     district_name = serializers.ReadOnlyField(source='district.district_name_eng')
     upozila_name = serializers.ReadOnlyField(source='upozila.upozila_name_eng')
+    is_blocked = serializers.ReadOnlyField(source='user.is_blocked')
 
     class Meta:
         model = RegularUserProfile

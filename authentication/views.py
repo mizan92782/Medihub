@@ -25,8 +25,10 @@ from authentication.serializer import (
     PasswordChangeSerializer,
     LogoutSerializer,
     Verify2FASerializer,
+    BecomeBloodDonorSerializer,
 )
 from authentication.services import AuthEmailService, ProfileCreationService, LoginService, LogoutService, PasswordResetService, PasswordChangeService
+from profiles.models.blood_donor_mod import BloodDonor
 
 logger = logging.getLogger(__name__)
 
@@ -620,3 +622,95 @@ class PasswordChangeViewSet(GenericViewSet):
             'access':  result['access'],
             'refresh': result['refresh'],
         }, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class DonorUpgradeViewSet(GenericViewSet):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=['Become a Donor'],
+        operation_summary='Become a Blood Donor — upgrade existing account without re-registering',
+        operation_description=(
+            'Authenticated users can upgrade their account to a blood donor. '
+            'No sign-out or new registration required. '
+            'The user_type is changed to blood_donor and a BloodDonor profile is created.'
+        ),
+        request_body=None,
+        consumes=['multipart/form-data'],
+        manual_parameters=[
+            openapi.Parameter('first_name', openapi.IN_FORM, description='First name', type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('last_name', openapi.IN_FORM, description='Last name', type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('gender', openapi.IN_FORM, description='male / female / other', type=openapi.TYPE_STRING, enum=[c[0] for c in GenderChoices.choices], required=True),
+            openapi.Parameter('date_of_birth', openapi.IN_FORM, description='YYYY-MM-DD', type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('contact_number', openapi.IN_FORM, description='Contact number', type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('blood_group', openapi.IN_FORM, description='A+ / A- / B+ / B- / AB+ / AB- / O+ / O-', type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('availability', openapi.IN_FORM, description='available / unavailable', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('last_donated', openapi.IN_FORM, description='YYYY-MM-DD', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('address', openapi.IN_FORM, description='Address', type=openapi.TYPE_STRING, required=False),
+            openapi.Parameter('division', openapi.IN_FORM, description='Division ID', type=openapi.TYPE_INTEGER, required=False),
+            openapi.Parameter('district', openapi.IN_FORM, description='District ID', type=openapi.TYPE_INTEGER, required=False),
+            openapi.Parameter('upozila', openapi.IN_FORM, description='Upozila ID', type=openapi.TYPE_INTEGER, required=False),
+        ],
+        responses={200: 'Upgraded to blood donor', 400: 'Validation error / already a donor'},
+    )
+    @action(detail=False, methods=['post'], url_path='become-donor')
+    def become_donor(self, request):
+        user = request.user
+
+        if BloodDonor.objects.filter(user=user).exists():
+            return Response({'error': 'You are already a registered blood donor.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = BecomeBloodDonorSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        for field in ('division', 'district', 'upozila'):
+            if data.get(field):
+                data[field] = data[field]  # already model instance from PrimaryKeyRelatedField
+
+        try:
+            from django.db import transaction
+            from profiles.models import RegularUserProfile
+            with transaction.atomic():
+                # Copy profile_dp and cover_photo from existing regular profile
+                try:
+                    reg = RegularUserProfile.objects.get(user=user)
+                    if reg.profile_dp and 'profile_dp' not in data:
+                        data['profile_dp'] = reg.profile_dp
+                    if reg.cover_photo and 'cover_photo' not in data:
+                        data['cover_photo'] = reg.cover_photo
+                except RegularUserProfile.DoesNotExist:
+                    pass
+                BloodDonor.objects.create(user=user, **data)
+                user.user_type = 'blood_donor'
+                user.is_blood_donor = True
+                user.save(update_fields=['user_type', 'is_blood_donor'])
+
+            logger.info('become_donor_success', extra={'user_id': user.id, 'email': user.email})
+            return Response({
+                'message':   'You are now a registered blood donor!',
+                'user_id':   user.id,
+                'email':     user.email,
+                'user_type': user.user_type,
+            }, status=status.HTTP_200_OK)
+
+        except DatabaseError:
+            logger.error('become_donor_db_error', extra={'user_id': user.id}, exc_info=True)
+            return Response({'error': 'Database error. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.critical('become_donor_unexpected_error', extra={'user_id': user.id}, exc_info=True)
+            return Response({'error': 'An unexpected error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated], url_path='toggle-account-active')
+    def toggle_account_active(self, request):
+        """Toggles profile visibility (is_active on profile, NOT User.is_active)."""
+        from profiles.models import BloodDonor
+        donor = BloodDonor.objects.filter(user=request.user).first()
+        if not donor:
+            return Response({'error': 'Blood donor profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+        donor.is_active = not donor.is_active
+        donor.save(update_fields=['is_active'])
+        state = 'active' if donor.is_active else 'inactive'
+        return Response({'message': f'Profile is now {state}.', 'is_active': donor.is_active})

@@ -16,6 +16,7 @@ from core.permissions import (
     IsAmbulanceUser,
     IsPharmacyUser,
     IsDiagnosticUser,
+    IsAdminUser,
 )
 from profiles.models import (
     PracticeLocation,
@@ -77,6 +78,12 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return RegularUserProfile.objects.filter(user=self.request.user)
 
+    def list(self, request, *args, **kwargs):
+        # Public listing only shows active, non-blocked profiles
+        qs = RegularUserProfile.objects.filter(is_active=True, user__is_blocked=False)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(APIResponse.success("Profiles retrieved", "profiles", serializer.data))
+
     @action(detail=False, methods=['get', 'put', 'patch'], url_path='me')
     def me(self, request):
         profile, created = RegularUserProfile.objects.get_or_create(
@@ -91,6 +98,34 @@ class UserProfileViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(APIResponse.success("User profile updated successfully", "profile", serializer.data))
+
+    @action(detail=False, methods=['post'], url_path='toggle-active')
+    def toggle_active(self, request):
+        """User can activate/deactivate their own profile visibility."""
+        profile, _ = RegularUserProfile.objects.get_or_create(
+            user=request.user,
+            defaults={'first_name': request.user.email.split('@')[0], 'last_name': 'User'}
+        )
+        profile.is_active = not profile.is_active
+        profile.save(update_fields=['is_active'])
+        state = 'active' if profile.is_active else 'inactive'
+        return Response(APIResponse.success(f"Profile is now {state}.", "is_active", profile.is_active))
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser], url_path='block')
+    def block_user(self, request, pk=None):
+        """Admin can block a user account. Blocked users cannot login."""
+        profile = self.get_object()
+        profile.user.is_blocked = True
+        profile.user.save(update_fields=['is_blocked'])
+        return Response(APIResponse.success("User has been blocked.", "is_blocked", True))
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser], url_path='unblock')
+    def unblock_user(self, request, pk=None):
+        """Admin can unblock a user account."""
+        profile = self.get_object()
+        profile.user.is_blocked = False
+        profile.user.save(update_fields=['is_blocked'])
+        return Response(APIResponse.success("User has been unblocked.", "is_blocked", False))
 
 
 class DoctorViewSet(viewsets.ModelViewSet):
@@ -108,7 +143,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Doctor.objects.select_related(
             'user', 'specialization', 'sub_specialization', 'division', 'district', 'upozila', 'union', 'details', 'evaluation'
-        ).prefetch_related('qualifications', 'hospital_affiliations', 'educations', 'experiences', 'schedules').all()
+        ).prefetch_related('qualifications', 'hospital_affiliations', 'educations', 'experiences', 'schedules').filter(is_active=True, user__is_blocked=False)
 
     @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[IsDoctorUser], url_path='me')
     def me(self, request):
@@ -123,6 +158,17 @@ class DoctorViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(APIResponse.success("Doctor profile updated successfully", "doctor", serializer.data))
+
+    @action(detail=False, methods=['post'], permission_classes=[IsDoctorUser], url_path='toggle-active')
+    def toggle_active(self, request):
+        """Doctor can activate/deactivate their own profile visibility."""
+        doctor = Doctor.objects.filter(user=request.user).first()
+        if not doctor:
+            return Response(APIResponse.error("Doctor profile not found"), status=status.HTTP_404_NOT_FOUND)
+        doctor.is_active = not doctor.is_active
+        doctor.save(update_fields=['is_active'])
+        state = 'active' if doctor.is_active else 'inactive'
+        return Response(APIResponse.success(f"Profile is now {state}.", "is_active", doctor.is_active))
 
     @action(detail=True, methods=['post'], permission_classes=[IsDoctorUser], url_path='details')
     def add_update_details(self, request, pk=None):
@@ -405,10 +451,15 @@ class BloodDonorViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['blood_group', 'availability', 'division', 'district', 'upozila', 'gender']
-    search_fields = ['first_name', 'last_name', 'address']
+    search_fields = [
+        'first_name', 'last_name', 'address',
+        'division__division_name_eng', 'division__division_name_bn',
+        'district__district_name_eng', 'district__district_name_bn',
+        'upozila__upozila_name_eng', 'upozila__upoila_name_bn',
+    ]
 
     def get_queryset(self):
-        return BloodDonor.objects.select_related('user', 'division', 'district', 'upozila').prefetch_related('donation_posts').all()
+        return BloodDonor.objects.select_related('user', 'division', 'district', 'upozila').prefetch_related('donation_posts').filter(is_active=True, user__is_blocked=False)
 
     @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[IsBloodDonorUser], url_path='me')
     def me(self, request):
@@ -423,6 +474,17 @@ class BloodDonorViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(APIResponse.success("Donor profile updated", "donor", serializer.data))
+
+    @action(detail=False, methods=['post'], permission_classes=[IsBloodDonorUser], url_path='toggle-active')
+    def toggle_active(self, request):
+        """Blood donor can activate/deactivate their own profile visibility."""
+        donor = BloodDonor.objects.filter(user=request.user).first()
+        if not donor:
+            return Response(APIResponse.error("Blood donor profile not found"), status=status.HTTP_404_NOT_FOUND)
+        donor.is_active = not donor.is_active
+        donor.save(update_fields=['is_active'])
+        state = 'active' if donor.is_active else 'inactive'
+        return Response(APIResponse.success(f"Profile is now {state}.", "is_active", donor.is_active))
 
     @action(detail=False, methods=['post'], permission_classes=[IsBloodDonorUser], url_path='donation-post')
     def create_donation_post(self, request):
@@ -447,7 +509,7 @@ class AmbulanceViewSet(viewsets.ModelViewSet):
     search_fields = ['owner_name', 'vehicle_number', 'address']
 
     def get_queryset(self):
-        return AmbulanceProfile.objects.select_related('user', 'division', 'district', 'upozila').all()
+        return AmbulanceProfile.objects.select_related('user', 'division', 'district', 'upozila').filter(is_active=True, user__is_blocked=False)
 
     @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[IsAmbulanceUser], url_path='me')
     def me(self, request):
@@ -463,6 +525,17 @@ class AmbulanceViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(APIResponse.success("Ambulance profile updated", "ambulance", serializer.data))
 
+    @action(detail=False, methods=['post'], permission_classes=[IsAmbulanceUser], url_path='toggle-active')
+    def toggle_active(self, request):
+        """Ambulance owner can activate/deactivate their own profile visibility."""
+        ambulance = AmbulanceProfile.objects.filter(user=request.user).first()
+        if not ambulance:
+            return Response(APIResponse.error("Ambulance profile not found"), status=status.HTTP_404_NOT_FOUND)
+        ambulance.is_active = not ambulance.is_active
+        ambulance.save(update_fields=['is_active'])
+        state = 'active' if ambulance.is_active else 'inactive'
+        return Response(APIResponse.success(f"Profile is now {state}.", "is_active", ambulance.is_active))
+
 
 class PharmacyViewSet(viewsets.ModelViewSet):
     """
@@ -476,7 +549,7 @@ class PharmacyViewSet(viewsets.ModelViewSet):
     search_fields = ['pharmacy_name', 'owner_name', 'license_number', 'address']
 
     def get_queryset(self):
-        return PharmacyProfile.objects.select_related('user', 'division', 'district', 'upozila').all()
+        return PharmacyProfile.objects.select_related('user', 'division', 'district', 'upozila').filter(is_active=True, user__is_blocked=False)
 
     @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[IsPharmacyUser], url_path='me')
     def me(self, request):
@@ -492,6 +565,17 @@ class PharmacyViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(APIResponse.success("Pharmacy profile updated", "pharmacy", serializer.data))
 
+    @action(detail=False, methods=['post'], permission_classes=[IsPharmacyUser], url_path='toggle-active')
+    def toggle_active(self, request):
+        """Pharmacy owner can activate/deactivate their own profile visibility."""
+        pharmacy = PharmacyProfile.objects.filter(user=request.user).first()
+        if not pharmacy:
+            return Response(APIResponse.error("Pharmacy profile not found"), status=status.HTTP_404_NOT_FOUND)
+        pharmacy.is_active = not pharmacy.is_active
+        pharmacy.save(update_fields=['is_active'])
+        state = 'active' if pharmacy.is_active else 'inactive'
+        return Response(APIResponse.success(f"Profile is now {state}.", "is_active", pharmacy.is_active))
+
 
 class PharmacyMedicineViewSet(viewsets.ModelViewSet):
     """
@@ -506,7 +590,7 @@ class PharmacyMedicineViewSet(viewsets.ModelViewSet):
     ordering_fields = ['price', 'name', 'created']
 
     def get_queryset(self):
-        return PharmacyMedicine.objects.select_related('pharmacy').all()
+        return PharmacyMedicine.objects.select_related('pharmacy').filter(pharmacy__is_active=True, pharmacy__user__is_blocked=False)
 
     def create(self, request, *args, **kwargs):
         if not request.user.is_authenticated or request.user.user_type != 'pharmacy':
@@ -532,7 +616,7 @@ class DiagnosticViewSet(viewsets.ModelViewSet):
     search_fields = ['diagnostic_name', 'owner_name', 'license_number', 'address']
 
     def get_queryset(self):
-        return DiagnosticProfile.objects.select_related('user', 'division', 'district', 'upozila').all()
+        return DiagnosticProfile.objects.select_related('user', 'division', 'district', 'upozila').filter(is_active=True, user__is_blocked=False)
 
     @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[IsDiagnosticUser], url_path='me')
     def me(self, request):
@@ -547,6 +631,17 @@ class DiagnosticViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(APIResponse.success("Diagnostic profile updated", "diagnostic", serializer.data))
+
+    @action(detail=False, methods=['post'], permission_classes=[IsDiagnosticUser], url_path='toggle-active')
+    def toggle_active(self, request):
+        """Diagnostic center owner can activate/deactivate their own profile visibility."""
+        diagnostic = DiagnosticProfile.objects.filter(user=request.user).first()
+        if not diagnostic:
+            return Response(APIResponse.error("Diagnostic profile not found"), status=status.HTTP_404_NOT_FOUND)
+        diagnostic.is_active = not diagnostic.is_active
+        diagnostic.save(update_fields=['is_active'])
+        state = 'active' if diagnostic.is_active else 'inactive'
+        return Response(APIResponse.success(f"Profile is now {state}.", "is_active", diagnostic.is_active))
 
 
 class DiagnosticTestViewSet(viewsets.ModelViewSet):
