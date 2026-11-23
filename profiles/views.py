@@ -868,9 +868,10 @@ class DiagnosticTestViewSet(viewsets.ModelViewSet):
     filterset_fields = ['diagnostic', 'category', 'is_available']
     search_fields = ['test_name', 'category', 'description', 'preparation_instructions']
     ordering_fields = ['price', 'test_name', 'created']
+    ordering = ['-created', '-id']
 
     def get_queryset(self):
-        return DiagnosticTest.objects.select_related('diagnostic').all()
+        return DiagnosticTest.objects.select_related('diagnostic').order_by('-created', '-id')
 
     def create(self, request, *args, **kwargs):
         if not request.user.is_authenticated or request.user.user_type != 'diagnostic':
@@ -882,6 +883,27 @@ class DiagnosticTestViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(diagnostic=diagnostic)
         return Response(APIResponse.success("Diagnostic test added successfully", "test", serializer.data), status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or request.user.user_type != 'diagnostic':
+            return Response(APIResponse.error("Only registered diagnostic centers can edit tests"), status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        if instance.diagnostic.user != request.user:
+            return Response(APIResponse.error("You can only edit tests belonging to your center"), status=status.HTTP_403_FORBIDDEN)
+        partial = kwargs.pop('partial', False)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(APIResponse.success("Diagnostic test updated successfully", "test", serializer.data))
+
+    def destroy(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or request.user.user_type != 'diagnostic':
+            return Response(APIResponse.error("Only registered diagnostic centers can delete tests"), status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        if instance.diagnostic.user != request.user:
+            return Response(APIResponse.error("You can only delete tests belonging to your center"), status=status.HTTP_403_FORBIDDEN)
+        instance.delete()
+        return Response(APIResponse.success("Diagnostic test deleted successfully"), status=status.HTTP_200_OK)
 
 
 class MedicalMetadataViewSet(viewsets.ViewSet):

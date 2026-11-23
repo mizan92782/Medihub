@@ -15,10 +15,12 @@ class DiagnosticViewSet(viewsets.ModelViewSet):
     search_fields = ['diagnostic_name', 'license_number', 'contact_number']
 
 class DiagnosticTestViewSet(viewsets.ModelViewSet):
-    queryset = DiagnosticTest.objects.all().select_related('diagnostic')
+    queryset = DiagnosticTest.objects.all().select_related('diagnostic').order_by('-created', '-id')
     serializer_class = DiagnosticTestSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     pagination_class = StandardResultsSetPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['diagnostic', 'category', 'is_available']
     search_fields = ['test_name', 'category', 'preparation_instructions']
+    ordering_fields = ['price', 'test_name', 'created']
+    ordering = ['-created', '-id']
