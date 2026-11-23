@@ -8,6 +8,7 @@ from .doctor_prof_mod import (
     DoctorDetails,
     DoctorEducation,
     DoctorWorkingExperience,
+    DoctorAffiliation,
     PracticeLocation,
     ScheduleInstanceStatus,
     DoctorScheduling,

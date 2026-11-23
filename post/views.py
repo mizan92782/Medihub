@@ -5,6 +5,10 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticate
 from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Count
+from django.core.cache import cache
+from django.db.models.signals import post_save, post_delete
+import time
 
 from core.api_response import APIResponse
 from core.pagination import StandardResultsSetPagination
@@ -20,6 +24,7 @@ from post.models.post_interactions_mod import PostLike, PostComment, PostShare
 from post.models.post_image_mod import PostImage
 from profiles.models import BloodDonationPost
 from profiles.models.blood_donor_mod import BloodDonor
+from interactions.models.user_follow import UserFollow
 from notification.servcies import AppNotificationService
 
 from post.serializers import (
@@ -341,6 +346,19 @@ class PostImageUploadView(viewsets.ViewSet):
         return Response(APIResponse.success('Images uploaded', 'images', created_images))
 
 
+def bump_feed_version(*args, **kwargs):
+    try:
+        cache.incr('community_feed_version')
+    except Exception:
+        cache.set('community_feed_version', int(time.time() * 1000), timeout=86400 * 30)
+
+for _model in [BloodNeedPost, MedicineNeedPost, EquipmentNeedPost, EquipmentSellPost,
+               MedicinePost, GeneralPost, AmbulanceNeedPost, BloodDonationPost,
+               PostLike, PostComment, PostShare, UserFollow]:
+    post_save.connect(bump_feed_version, sender=_model)
+    post_delete.connect(bump_feed_version, sender=_model)
+
+
 class PostInteractionViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
@@ -385,6 +403,7 @@ class PostInteractionViewSet(viewsets.ViewSet):
             liked = True
             
         total_likes = PostLike.objects.filter(content_type=ct, object_id=post_id).count()
+        bump_feed_version()
         return Response(APIResponse.success("Post like status updated", "like", {"liked": liked, "total_likes": total_likes}))
 
     @action(detail=False, methods=['post'], url_path='comment')
@@ -405,6 +424,7 @@ class PostInteractionViewSet(viewsets.ViewSet):
             object_id=post_id,
             content=content
         )
+        bump_feed_version()
         return Response(APIResponse.success("Comment added successfully", "comment", PostCommentSerializer(comment).data))
 
     @action(detail=False, methods=['get'], url_path='comments', permission_classes=[AllowAny])
@@ -435,6 +455,7 @@ class PostInteractionViewSet(viewsets.ViewSet):
             
         PostShare.objects.create(user=request.user, content_type=ct, object_id=post_id)
         total_shares = PostShare.objects.filter(content_type=ct, object_id=post_id).count()
+        bump_feed_version()
         return Response(APIResponse.success("Share logged successfully", "share", {"total_shares": total_shares}))
 
 
@@ -445,46 +466,116 @@ class PostFeedViewSet(viewsets.ViewSet):
         user = request.user
         search = request.query_params.get('search', '').strip().lower()
         post_type_filter = request.query_params.get('post_type', 'all')
-        sort_by = request.query_params.get('sort', 'newest')  # newest | oldest | most_liked | most_commented | urgent
+        sort_by = request.query_params.get('sort', 'recommended')  # recommended (default) | newest | urgent | most_liked | most_commented | oldest
+        user_id_param = request.query_params.get('user_id')
 
-        # 1. Fetch all posts
-        blood_needs = BloodNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
-        med_needs = MedicineNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
-        eq_needs = EquipmentNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
-        eq_sells = EquipmentSellPost.objects.select_related('user', 'division', 'district', 'upozila').all()
-        med_posts = MedicinePost.objects.select_related('user', 'division', 'district', 'upozila').all()
-        generals = GeneralPost.objects.select_related('user', 'division', 'district', 'upozila').all()
-        amb_needs = AmbulanceNeedPost.objects.select_related('user', 'division', 'district', 'upozila').all()
-        donations = BloodDonationPost.objects.select_related('donor__user', 'division', 'district', 'upozila').all()
+        try:
+            page = max(1, int(request.query_params.get('page', 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = max(1, min(50, int(request.query_params.get('page_size', 10))))
+        except (TypeError, ValueError):
+            page_size = 10
+
+        # Cache check
+        v = cache.get('community_feed_version') or 1
+        user_cache_id = user.id if user and user.is_authenticated else 'anon'
+        cache_key = f"feed_v{v}_{user_cache_id}_{post_type_filter}_{sort_by}_{page}_{page_size}_{search}_{user_id_param}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        # Preload User Preferences for Recommendation Scoring
+        user_following_ids = set()
+        user_district_id = None
+        user_division_id = None
+        user_blood_group = None
+        user_type = getattr(user, 'user_type', None)
+
+        if user and user.is_authenticated:
+            try:
+                user_following_ids = set(UserFollow.objects.filter(follower=user).values_list('following_id', flat=True))
+            except Exception:
+                pass
+
+            try:
+                if hasattr(user, 'profile') and user.profile:
+                    user_district_id = user.profile.district_id
+                    user_division_id = user.profile.division_id
+                elif hasattr(user, 'blood_donor') and user.blood_donor:
+                    user_district_id = user.blood_donor.district_id
+                    user_division_id = user.blood_donor.division_id
+                    user_blood_group = user.blood_donor.blood_group
+                elif hasattr(user, 'doctor') and user.doctor:
+                    user_district_id = user.doctor.district_id
+                    user_division_id = user.doctor.division_id
+                elif hasattr(user, 'ambulance') and user.ambulance:
+                    user_district_id = user.ambulance.district_id
+                    user_division_id = user.ambulance.division_id
+            except Exception:
+                pass
 
         feed_items = []
 
-        def add_items(queryset, post_type, serializer_class):
-            if post_type_filter != 'all' and post_type_filter != post_type:
+        def process_model(model_cls, p_type, serializer_cls, is_donation=False):
+            if post_type_filter != 'all' and post_type_filter != p_type:
                 return
-            ct = ContentType.objects.get_for_model(queryset.model)
-            for post in queryset:
-                likes = PostLike.objects.filter(content_type=ct, object_id=post.id)
-                comments_count = PostComment.objects.filter(content_type=ct, object_id=post.id).count()
-                shares_count = PostShare.objects.filter(content_type=ct, object_id=post.id).count()
 
-                user_has_liked = False
-                if user.is_authenticated:
-                    user_has_liked = likes.filter(user=user).exists()
+            select_fields = ['division', 'district', 'upozila']
+            if is_donation:
+                select_fields.append('donor__user')
+            else:
+                select_fields.append('user')
 
+            qs = model_cls.objects.select_related(*select_fields).all()
+
+            ct = ContentType.objects.get_for_model(model_cls)
+
+            # Bulk aggregate likes, comments, shares
+            likes_map = dict(
+                PostLike.objects.filter(content_type=ct)
+                .values('object_id')
+                .annotate(c=Count('id'))
+                .values_list('object_id', 'c')
+            )
+            comments_map = dict(
+                PostComment.objects.filter(content_type=ct)
+                .values('object_id')
+                .annotate(c=Count('id'))
+                .values_list('object_id', 'c')
+            )
+            shares_map = dict(
+                PostShare.objects.filter(content_type=ct)
+                .values('object_id')
+                .annotate(c=Count('id'))
+                .values_list('object_id', 'c')
+            )
+            user_liked_set = set()
+            if user and user.is_authenticated:
+                user_liked_set = set(
+                    PostLike.objects.filter(content_type=ct, user=user)
+                    .values_list('object_id', flat=True)
+                )
+
+            for post in qs:
                 email = ""
-                user_id = None
+                u_id = None
                 author_user = None
-                if post_type == 'blood_donation':
+
+                if is_donation:
                     if post.donor and post.donor.user:
                         email = post.donor.user.email
-                        user_id = post.donor.user.id
+                        u_id = post.donor.user.id
                         author_user = post.donor.user
                 else:
                     if post.user:
                         email = post.user.email
-                        user_id = post.user.id
+                        u_id = post.user.id
                         author_user = post.user
+
+                if user_id_param and str(u_id) != str(user_id_param):
+                    continue
 
                 author_name = email.split("@")[0] if email else "User"
                 author_avatar = None
@@ -517,10 +608,13 @@ class PostFeedViewSet(viewsets.ViewSet):
                     except Exception:
                         pass
 
-                details_data = serializer_class(post).data
-                likes_count = likes.count()
+                details_data = serializer_cls(post).data
+                likes_count = likes_map.get(post.id, 0)
+                comments_count = comments_map.get(post.id, 0)
+                shares_count = shares_map.get(post.id, 0)
+                user_has_liked = post.id in user_liked_set
 
-                # Server-side search filter
+                # Search filter
                 if search:
                     searchable = " ".join([
                         str(email),
@@ -539,13 +633,57 @@ class PostFeedViewSet(viewsets.ViewSet):
                     if search not in searchable:
                         continue
 
+                # Compute Dynamic Personalized Recommendation Score
+                score = 0.0
+
+                # 1. Following Boost:
+                if u_id and u_id in user_following_ids:
+                    score += 150.0
+
+                # 2. Location Relevance:
+                p_district_id = getattr(post, 'district_id', None)
+                p_division_id = getattr(post, 'division_id', None)
+                if user_district_id and p_district_id and user_district_id == p_district_id:
+                    score += 60.0
+                elif user_division_id and p_division_id and user_division_id == p_division_id:
+                    score += 30.0
+
+                # 3. User Role & Needs:
+                if user_type == 'blood_donor' or getattr(user, 'is_blood_donor', False):
+                    if p_type == 'blood_need':
+                        score += 80.0
+                        if user_blood_group and details_data.get('blood_group') == user_blood_group:
+                            score += 40.0
+                elif user_type == 'ambulance' and p_type == 'ambulance_need':
+                    score += 80.0
+                elif user_type in ['doctor', 'pharmacy'] and p_type in ['medicine_need', 'medicine']:
+                    score += 60.0
+
+                # 4. Urgency:
+                p_urgency = str(getattr(post, 'urgency', 'medium')).lower()
+                if p_urgency == 'critical':
+                    score += 70.0
+                elif p_urgency == 'high':
+                    score += 40.0
+                elif p_urgency == 'medium':
+                    score += 15.0
+
+                # 5. Engagement:
+                score += (likes_count * 2.5) + (comments_count * 4.0) + (shares_count * 3.0)
+
+                # 6. Freshness (Recency decay):
+                created_ts = post.created.timestamp() if hasattr(post.created, 'timestamp') else 0
+                hours_ago = max(0, (time.time() - created_ts) / 3600)
+                freshness = max(0.0, 80.0 - (hours_ago * 0.8))
+                score += freshness
+
                 feed_items.append({
                     "id": post.id,
                     "user_email": email,
-                    "user_id": user_id,
+                    "user_id": u_id,
                     "author_name": author_name,
                     "author_avatar": author_avatar,
-                    "post_type": post_type,
+                    "post_type": p_type,
                     "created": post.created,
                     "urgency": getattr(post, 'urgency', 'medium'),
                     "status": getattr(post, 'status', 'open'),
@@ -557,20 +695,26 @@ class PostFeedViewSet(viewsets.ViewSet):
                     "shares_count": shares_count,
                     "user_has_liked": user_has_liked,
                     "details": details_data,
+                    "score": round(score, 2),
                 })
 
-        add_items(blood_needs, 'blood_need', BloodNeedPostSerializer)
-        add_items(med_needs, 'medicine_need', MedicineNeedPostSerializer)
-        add_items(eq_needs, 'equipment_need', EquipmentNeedPostSerializer)
-        add_items(eq_sells, 'equipment_sell', EquipmentSellPostSerializer)
-        add_items(med_posts, 'medicine', MedicinePostSerializer)
-        add_items(generals, 'general', GeneralPostSerializer)
-        add_items(amb_needs, 'ambulance_need', AmbulanceNeedPostSerializer)
-        add_items(donations, 'blood_donation', BloodDonationPostSerializer)
+        process_model(BloodNeedPost, 'blood_need', BloodNeedPostSerializer)
+        process_model(MedicineNeedPost, 'medicine_need', MedicineNeedPostSerializer)
+        process_model(EquipmentNeedPost, 'equipment_need', EquipmentNeedPostSerializer)
+        process_model(EquipmentSellPost, 'equipment_sell', EquipmentSellPostSerializer)
+        process_model(MedicinePost, 'medicine', MedicinePostSerializer)
+        process_model(GeneralPost, 'general', GeneralPostSerializer)
+        process_model(AmbulanceNeedPost, 'ambulance_need', AmbulanceNeedPostSerializer)
+        process_model(BloodDonationPost, 'blood_donation', BloodDonationPostSerializer, is_donation=True)
 
         URGENCY_ORDER = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
 
-        if sort_by == 'oldest':
+        # Sorting
+        if sort_by == 'recommended':
+            feed_items.sort(key=lambda x: x['score'], reverse=True)
+        elif sort_by == 'newest':
+            feed_items.sort(key=lambda x: -x['created'].timestamp() if hasattr(x['created'], 'timestamp') else 0)
+        elif sort_by == 'oldest':
             feed_items.sort(key=lambda x: x['created'].timestamp() if hasattr(x['created'], 'timestamp') else 0)
         elif sort_by == 'most_liked':
             feed_items.sort(key=lambda x: x['likes_count'], reverse=True)
@@ -581,7 +725,137 @@ class PostFeedViewSet(viewsets.ViewSet):
                 URGENCY_ORDER.get(str(x.get('urgency', 'medium')).lower(), 2),
                 -x['created'].timestamp() if hasattr(x['created'], 'timestamp') else 0
             ))
-        else:  # newest (default)
-            feed_items.sort(key=lambda x: -x['created'].timestamp() if hasattr(x['created'], 'timestamp') else 0)
+        else:
+            feed_items.sort(key=lambda x: x['score'], reverse=True)
 
-        return Response(APIResponse.success("Feed loaded successfully", "feed", feed_items))
+        # Pagination: default 10 per page
+        total_items = len(feed_items)
+        total_pages = max(1, (total_items + page_size - 1) // page_size)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paged_items = feed_items[start_idx:end_idx]
+
+        response_payload = {
+            "success": True,
+            "message": "Feed loaded successfully",
+            "feed": paged_items,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "total_items": total_items,
+                "has_next": page < total_pages,
+                "has_prev": page > 1,
+            }
+        }
+        cache.set(cache_key, response_payload, timeout=60)
+        return Response(response_payload)
+
+    @action(detail=False, methods=['get'], url_path='single')
+    def single_post(self, request):
+        post_type = request.query_params.get('post_type')
+        post_id = request.query_params.get('id') or request.query_params.get('post_id')
+        if not post_type or not post_id:
+            return Response(APIResponse.error("post_type and id are required"), status=status.HTTP_400_BAD_REQUEST)
+
+        mapping = {
+            'blood_need': (BloodNeedPost, BloodNeedPostSerializer),
+            'medicine_need': (MedicineNeedPost, MedicineNeedPostSerializer),
+            'equipment_need': (EquipmentNeedPost, EquipmentNeedPostSerializer),
+            'equipment_sell': (EquipmentSellPost, EquipmentSellPostSerializer),
+            'medicine': (MedicinePost, MedicinePostSerializer),
+            'general': (GeneralPost, GeneralPostSerializer),
+            'ambulance_need': (AmbulanceNeedPost, AmbulanceNeedPostSerializer),
+            'blood_donation': (BloodDonationPost, BloodDonationPostSerializer),
+        }
+        if post_type not in mapping:
+            return Response(APIResponse.error("Invalid post_type"), status=status.HTTP_400_BAD_REQUEST)
+
+        model_class, serializer_class = mapping[post_type]
+        select_fields = ['division', 'district', 'upozila']
+        if post_type == 'blood_donation':
+            select_fields.append('donor__user')
+        else:
+            select_fields.append('user')
+
+        post = model_class.objects.select_related(*select_fields).filter(id=post_id).first()
+        if not post:
+            return Response(APIResponse.error("Post not found"), status=status.HTTP_404_NOT_FOUND)
+
+        ct = ContentType.objects.get_for_model(model_class)
+        likes = PostLike.objects.filter(content_type=ct, object_id=post.id)
+        comments_count = PostComment.objects.filter(content_type=ct, object_id=post.id).count()
+        shares_count = PostShare.objects.filter(content_type=ct, object_id=post.id).count()
+
+        user = request.user
+        user_has_liked = False
+        if user and user.is_authenticated:
+            user_has_liked = likes.filter(user=user).exists()
+
+        email = ""
+        user_id = None
+        author_user = None
+        if post_type == 'blood_donation':
+            if post.donor and post.donor.user:
+                email = post.donor.user.email
+                user_id = post.donor.user.id
+                author_user = post.donor.user
+        else:
+            if post.user:
+                email = post.user.email
+                user_id = post.user.id
+                author_user = post.user
+
+        author_name = email.split("@")[0] if email else "User"
+        author_avatar = None
+        if author_user:
+            try:
+                if hasattr(author_user, 'profile') and author_user.profile:
+                    prof = author_user.profile
+                    author_name = f"{prof.first_name} {prof.last_name}".strip() or author_name
+                    author_avatar = prof.profile_dp.url if prof.profile_dp else None
+                elif hasattr(author_user, 'doctor') and author_user.doctor:
+                    doc = author_user.doctor
+                    author_name = f"Dr. {doc.first_name} {doc.last_name}".strip()
+                    author_avatar = doc.profile_dp.url if doc.profile_dp else None
+                elif hasattr(author_user, 'blood_donor') and author_user.blood_donor:
+                    donor = author_user.blood_donor
+                    author_name = f"{donor.first_name} {donor.last_name}".strip() or author_name
+                    author_avatar = donor.profile_dp.url if donor.profile_dp else None
+                elif hasattr(author_user, 'ambulance') and author_user.ambulance:
+                    amb = author_user.ambulance
+                    author_name = amb.owner_name or author_name
+                    author_avatar = amb.profile_dp.url if amb.profile_dp else None
+                elif hasattr(author_user, 'pharmacy') and author_user.pharmacy:
+                    ph = author_user.pharmacy
+                    author_name = ph.pharmacy_name or author_name
+                    author_avatar = ph.profile_dp.url if ph.profile_dp else None
+                elif hasattr(author_user, 'diagnostic') and author_user.diagnostic:
+                    dg = author_user.diagnostic
+                    author_name = dg.diagnostic_name or author_name
+                    author_avatar = dg.profile_dp.url if dg.profile_dp else None
+            except Exception:
+                pass
+
+        details_data = serializer_class(post).data
+        item = {
+            "id": post.id,
+            "user_email": email,
+            "user_id": user_id,
+            "author_name": author_name,
+            "author_avatar": author_avatar,
+            "post_type": post_type,
+            "created": post.created,
+            "urgency": getattr(post, 'urgency', 'medium'),
+            "status": getattr(post, 'status', 'open'),
+            "division_name": post.division.division_name_eng if post.division else None,
+            "district_name": post.district.district_name_eng if post.district else None,
+            "upozila_name": post.upozila.upozila_name_eng if post.upozila else None,
+            "likes_count": likes.count(),
+            "comments_count": comments_count,
+            "shares_count": shares_count,
+            "user_has_liked": user_has_liked,
+            "details": details_data,
+        }
+        return Response(APIResponse.success("Post loaded successfully", "post", item))
+

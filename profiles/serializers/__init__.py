@@ -8,6 +8,7 @@ from profiles.models import (
     DoctorDetails,
     DoctorEducation,
     DoctorWorkingExperience,
+    DoctorAffiliation,
     DoctorScheduling,
     DoctorDateSlot,
     DoctorRating,
@@ -182,6 +183,13 @@ class DoctorBookingSerializer(serializers.ModelSerializer):
         read_only_fields = ['user', 'created', 'updated']
 
 
+class DoctorAffiliationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorAffiliation
+        fields = '__all__'
+        read_only_fields = ['doctor', 'created', 'updated']
+
+
 # Main Doctor Profile Serializer
 class DoctorProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
@@ -189,6 +197,7 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
     sub_specialization_detail = SubSpecializationSerializer(source='sub_specialization', read_only=True)
     qualifications_detail = QualificationSerializer(source='qualifications', many=True, read_only=True)
     hospitals_detail = HospitalSerializer(source='hospital_affiliations', many=True, read_only=True)
+    affiliations_detail = DoctorAffiliationSerializer(source='affiliations', many=True, read_only=True)
     details = DoctorDetailsSerializer(read_only=True)
     educations = DoctorEducationSerializer(many=True, read_only=True)
     experiences = DoctorWorkingExperienceSerializer(many=True, read_only=True)
@@ -272,6 +281,8 @@ class PharmacyProfileSerializer(serializers.ModelSerializer):
 class DiagnosticTestSerializer(serializers.ModelSerializer):
     diagnostic_name = serializers.ReadOnlyField(source='diagnostic.diagnostic_name')
     contact_number = serializers.ReadOnlyField(source='diagnostic.contact_number')
+    latitude = serializers.ReadOnlyField(source='diagnostic.latitude')
+    longitude = serializers.ReadOnlyField(source='diagnostic.longitude')
 
     class Meta:
         model = DiagnosticTest

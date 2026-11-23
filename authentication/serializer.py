@@ -19,7 +19,7 @@ class _BaseSignUpSerializer(serializers.Serializer):
     email     = serializers.EmailField()
     password  = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
-    user_type = serializers.ChoiceField(choices=RoleChoices)
+    user_type = serializers.ChoiceField(choices=RoleChoices, required=False)
 
     division = serializers.PrimaryKeyRelatedField(queryset=Division.objects.all(), required=False, allow_null=True)
     district = serializers.PrimaryKeyRelatedField(queryset=District.objects.none(), required=False, allow_null=True)
@@ -44,12 +44,15 @@ class _BaseSignUpSerializer(serializers.Serializer):
             raise serializers.ValidationError({'email': 'Email already in use.'})
         return data
 
-    def to_cache(self, user_type: str) -> dict:
+    def to_cache(self, user_type: str = None) -> dict:
         data = self.validated_data.copy()
         for field in ('division', 'district', 'upozila', 'union'):
             if data.get(field):
                 data[field] = data[field].id
-        data['user_type'] = user_type
+        effective_type = data.get('user_type') or user_type or 'regular'
+        if effective_type == 'user':
+            effective_type = 'regular'
+        data['user_type'] = effective_type
         return data
 
 

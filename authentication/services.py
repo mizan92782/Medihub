@@ -60,7 +60,13 @@ class AuthEmailService:
     def get_otp(cls, email):
         key  = UserSignupCacheKeys.user_register_key(email)
         data = cache.get(key)
-        return data.get('_otp') if data else None
+        if not data or not isinstance(data, dict):
+            return None
+        if '_otp' in data:
+            return data['_otp']
+        if 'data' in data and isinstance(data['data'], dict):
+            return data['data'].get('_otp')
+        return None
 
     @classmethod
     def invalidate_otp(cls, email):
@@ -73,7 +79,11 @@ class AuthEmailService:
     def get_signup_data(cls, email):
         key  = UserSignupCacheKeys.user_register_key(email)
         data = cache.get(key)
-        if not data:
+        if not data or not isinstance(data, dict):
+            return None
+        if 'data' in data and isinstance(data['data'], dict):
+            data = data['data']
+        if not data.get('email') and not data.get('user_type'):
             return None
         return {k: v for k, v in data.items() if k != '_otp'}
 
@@ -82,9 +92,15 @@ class AuthEmailService:
     # ---------------------------
     @classmethod
     def resend_otp(cls, email):
-        key  = UserSignupCacheKeys.user_register_key(email)
-        data = CacheManager.GetCache(key)
-        if not data:
+        key = UserSignupCacheKeys.user_register_key(email)
+        cached = cache.get(key)
+        if not cached or not isinstance(cached, dict):
+            return {'status': False, 'message': 'No signup session found. Please register again.'}
+        if 'data' in cached and isinstance(cached['data'], dict):
+            data = cached['data'].copy()
+        else:
+            data = cached.copy()
+        if not data.get('email') and not data.get('user_type'):
             return {'status': False, 'message': 'No signup session found. Please register again.'}
         otp = cls.generate_otp()
         data['_otp'] = cls.hash_otp(otp)
@@ -115,13 +131,24 @@ class AuthEmailService:
 class ProfileCreationService:
 
     @staticmethod
-    def _base_create(email, password, user_type, signup_data, profile_model, log_key):
+    def _clean_profile_data(data: dict) -> dict:
+        clean = data.copy()
+        for fk in ('division', 'district', 'upozila', 'union'):
+            if fk in clean:
+                val = clean.pop(fk)
+                if val is not None:
+                    clean[f'{fk}_id'] = val
+        return clean
+
+    @classmethod
+    def _base_create(cls, email, password, user_type, signup_data, profile_model, log_key):
         try:
             with transaction.atomic():
                 user = User.objects.create_user(email=email, password=password)
                 user.user_type = user_type
                 user.save(update_fields=['user_type'])
-                profile = profile_model.objects.create(user=user, **signup_data)
+                clean_data = cls._clean_profile_data(signup_data)
+                profile = profile_model.objects.create(user=user, **clean_data)
             logger.info(f'{log_key}_success', extra={'email': email, 'user_id': user.id, 'profile_id': profile.id})
             return user
         except DatabaseError:
@@ -132,28 +159,28 @@ class ProfileCreationService:
             raise
 
     @staticmethod
-    def _extract_credentials(signup_data: dict):
-        email    = signup_data.pop('email')
+    def _extract_credentials(signup_data: dict, default_user_type='regular'):
+        email = signup_data.pop('email')
         password = signup_data.pop('password')
         signup_data.pop('password2', None)
-        user_type = signup_data.pop('user_type', 'regular')
+        user_type = signup_data.pop('user_type', default_user_type) or default_user_type
         return email, password, user_type
 
     @classmethod
     def create_doctor_profile(cls, signup_data: dict) -> User:
-        email, password, user_type = cls._extract_credentials(signup_data)
+        email, password, user_type = cls._extract_credentials(signup_data, default_user_type='doctor')
         logger.info('profile_creation_started', extra={'email': email, 'type': 'doctor'})
         return cls._base_create(email, password, user_type, signup_data, Doctor, 'doctor_profile_creation')
 
     @classmethod
     def create_user_profile(cls, signup_data: dict) -> User:
-        email, password, user_type = cls._extract_credentials(signup_data)
+        email, password, user_type = cls._extract_credentials(signup_data, default_user_type='regular')
         logger.info('profile_creation_started', extra={'email': email, 'type': 'user'})
         return cls._base_create(email, password, user_type, signup_data, RegularUserProfile, 'user_profile_creation')
 
     @classmethod
     def create_blood_donor_profile(cls, signup_data: dict) -> User:
-        email, password, user_type = cls._extract_credentials(signup_data)
+        email, password, user_type = cls._extract_credentials(signup_data, default_user_type='blood_donor')
         logger.info('profile_creation_started', extra={'email': email, 'type': 'blood_donor'})
         with transaction.atomic():
             try:
@@ -161,7 +188,8 @@ class ProfileCreationService:
                 user.user_type = user_type
                 user.is_blood_donor = True
                 user.save(update_fields=['user_type', 'is_blood_donor'])
-                profile = BloodDonor.objects.create(user=user, **signup_data)
+                clean_data = cls._clean_profile_data(signup_data)
+                profile = BloodDonor.objects.create(user=user, **clean_data)
                 logger.info('blood_donor_profile_creation_success', extra={'email': email, 'user_id': user.id, 'profile_id': profile.id})
                 return user
             except DatabaseError:
@@ -173,19 +201,19 @@ class ProfileCreationService:
 
     @classmethod
     def create_ambulance_profile(cls, signup_data: dict) -> User:
-        email, password, user_type = cls._extract_credentials(signup_data)
+        email, password, user_type = cls._extract_credentials(signup_data, default_user_type='ambulance')
         logger.info('profile_creation_started', extra={'email': email, 'type': 'ambulance'})
         return cls._base_create(email, password, user_type, signup_data, AmbulanceProfile, 'ambulance_profile_creation')
 
     @classmethod
     def create_pharmacy_profile(cls, signup_data: dict) -> User:
-        email, password, user_type = cls._extract_credentials(signup_data)
+        email, password, user_type = cls._extract_credentials(signup_data, default_user_type='pharmacy')
         logger.info('profile_creation_started', extra={'email': email, 'type': 'pharmacy'})
         return cls._base_create(email, password, user_type, signup_data, PharmacyProfile, 'pharmacy_profile_creation')
 
     @classmethod
     def create_diagnostic_profile(cls, signup_data: dict) -> User:
-        email, password, user_type = cls._extract_credentials(signup_data)
+        email, password, user_type = cls._extract_credentials(signup_data, default_user_type='diagnostic')
         logger.info('profile_creation_started', extra={'email': email, 'type': 'diagnostic'})
         return cls._base_create(email, password, user_type, signup_data, DiagnosticProfile, 'diagnostic_profile_creation')
         
@@ -292,8 +320,9 @@ class LogoutService:
             logger.info('logout_success')
             return {'status': True, 'message': 'Logged out successfully.'}
         except Exception:
-            logger.warning('logout_invalid_token', exc_info=True)
-            return {'status': False, 'message': 'Invalid or expired token.'}
+            logger.warning('logout_token_warning', exc_info=True)
+            # If the token is already expired or blacklisted, treat logout as completed successfully
+            return {'status': True, 'message': 'Logged out successfully.'}
 
 
 class PasswordChangeService:

@@ -9,6 +9,8 @@ class DiagnosticProfileSerializer(serializers.ModelSerializer):
 class DiagnosticTestSerializer(serializers.ModelSerializer):
     diagnostic_name = serializers.ReadOnlyField(source='diagnostic.diagnostic_name')
     contact_number = serializers.ReadOnlyField(source='diagnostic.contact_number')
+    latitude = serializers.ReadOnlyField(source='diagnostic.latitude')
+    longitude = serializers.ReadOnlyField(source='diagnostic.longitude')
 
     class Meta:
         model = DiagnosticTest

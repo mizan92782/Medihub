@@ -55,8 +55,15 @@ class BlogPostViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        doctor_param = self.request.query_params.get('doctor')
+        if doctor_param:
+            if user.is_authenticated and hasattr(user, 'doctor') and str(user.doctor.id) == str(doctor_param):
+                return BlogPost.objects.filter(doctor=user.doctor).select_related('doctor', 'doctor__user').prefetch_related('media', 'comments').all()
+            return BlogPost.objects.filter(doctor_id=doctor_param, status='published').select_related('doctor', 'doctor__user').prefetch_related('media', 'comments').all()
+
         if user.is_authenticated and user.user_type == 'doctor' and hasattr(user, 'doctor'):
-            return BlogPost.objects.filter(doctor=user.doctor)
+            if self.action in ['update', 'partial_update', 'destroy'] or self.request.query_params.get('my') == 'true':
+                return BlogPost.objects.filter(doctor=user.doctor)
         return BlogPost.objects.filter(status='published').select_related('doctor', 'doctor__user').prefetch_related('media', 'comments').all()
 
     def perform_create(self, serializer):

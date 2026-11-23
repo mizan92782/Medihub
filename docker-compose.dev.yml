@@ -85,7 +85,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: medihub_celery_worker
-    command: celery -A medihub worker --loglevel=info --queues=default -c 2
+    command: celery -A medihub worker --loglevel=info --queues=default,celery -c 2
     env_file:
       - .env
     volumes:

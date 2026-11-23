@@ -146,7 +146,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Doctor.objects.select_related(
             'user', 'specialization', 'sub_specialization', 'division', 'district', 'upozila', 'union', 'details', 'evaluation'
-        ).prefetch_related('qualifications', 'hospital_affiliations', 'educations', 'experiences', 'schedules').filter(is_active=True, user__is_blocked=False)
+        ).prefetch_related('qualifications', 'hospital_affiliations', 'affiliations', 'educations', 'experiences', 'schedules').filter(is_active=True, user__is_blocked=False)
 
     def retrieve(self, request, *args, **kwargs):
         pk = kwargs.get('pk')
@@ -270,6 +270,44 @@ class DoctorViewSet(viewsets.ModelViewSet):
             exp.delete()
             CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'experience'))
             return Response(APIResponse.success("Experience deleted successfully"), status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post', 'put', 'patch', 'delete'], permission_classes=[IsDoctorUser], url_path='affiliation')
+    def manage_affiliation(self, request, pk=None):
+        doctor = self.get_object()
+        from profiles.models.doctor_prof_mod import DoctorAffiliation
+        from profiles.serializers import DoctorAffiliationSerializer
+
+        if request.method == 'POST':
+            serializer = DoctorAffiliationSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(doctor=doctor)
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'about'))
+            CacheManager.DeleteCache(CacheKeys.DoctorProfile(pk))
+            return Response(APIResponse.success("Affiliation added successfully", "affiliation", serializer.data), status=status.HTTP_201_CREATED)
+        elif request.method in ['PUT', 'PATCH']:
+            aff_id = request.query_params.get('id') or request.data.get('id')
+            if not aff_id:
+                return Response(APIResponse.error("Affiliation ID is required"), status=status.HTTP_400_BAD_REQUEST)
+            aff = DoctorAffiliation.objects.filter(doctor=doctor, id=aff_id).first()
+            if not aff:
+                return Response(APIResponse.error("Affiliation not found"), status=status.HTTP_404_NOT_FOUND)
+            serializer = DoctorAffiliationSerializer(aff, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'about'))
+            CacheManager.DeleteCache(CacheKeys.DoctorProfile(pk))
+            return Response(APIResponse.success("Affiliation updated successfully", "affiliation", serializer.data))
+        elif request.method == 'DELETE':
+            aff_id = request.query_params.get('id')
+            if not aff_id:
+                return Response(APIResponse.error("Affiliation ID is required"), status=status.HTTP_400_BAD_REQUEST)
+            aff = DoctorAffiliation.objects.filter(doctor=doctor, id=aff_id).first()
+            if not aff:
+                return Response(APIResponse.error("Affiliation not found"), status=status.HTTP_404_NOT_FOUND)
+            aff.delete()
+            CacheManager.DeleteCache(CacheKeys.DoctorTab(pk, 'about'))
+            CacheManager.DeleteCache(CacheKeys.DoctorProfile(pk))
+            return Response(APIResponse.success("Affiliation deleted successfully"), status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post', 'delete'], permission_classes=[IsDoctorUser], url_path='schedule')
     def manage_schedule(self, request, pk=None):
@@ -397,13 +435,14 @@ class DoctorViewSet(viewsets.ModelViewSet):
         doctor = self.get_object()
 
         if tab_name == 'about':
-            from profiles.serializers import HospitalSerializer
+            from profiles.serializers import HospitalSerializer, DoctorAffiliationSerializer
             data = {
                 'bio': doctor.details.bio if hasattr(doctor, 'details') and doctor.details else None,
                 'language': doctor.details.language if hasattr(doctor, 'details') and doctor.details else None,
                 'website': doctor.details.website if hasattr(doctor, 'details') and doctor.details else None,
                 'license_number': doctor.license_number,
                 'hospitals_detail': HospitalSerializer(doctor.hospital_affiliations.all(), many=True).data,
+                'affiliations_detail': DoctorAffiliationSerializer(doctor.affiliations.all(), many=True).data,
             }
         elif tab_name == 'education':
             from profiles.serializers import DoctorEducationSerializer

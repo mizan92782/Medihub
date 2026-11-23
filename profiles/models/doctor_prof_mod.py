@@ -115,6 +115,27 @@ class DoctorWorkingExperience(models.Model):
         return f'{self.doctor} - {self.position}'
 
 
+class DoctorAffiliation(models.Model):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='affiliations')
+    hospital_name = models.CharField(max_length=200, help_text="Hospital or Clinic Name")
+    department = models.CharField(max_length=150, blank=True, null=True, help_text="Department")
+    designation = models.CharField(max_length=150, blank=True, null=True, help_text="Designation (e.g. Consultant, Professor)")
+    branch = models.CharField(max_length=150, blank=True, null=True, help_text="Branch (e.g. Dhanmondi, Uttara)")
+    address = models.CharField(max_length=300, blank=True, null=True, help_text="Hospital Address")
+    working_days = models.CharField(max_length=200, blank=True, null=True, help_text="e.g. Sat, Mon, Wed")
+    visiting_hours = models.CharField(max_length=150, blank=True, null=True, help_text="e.g. 5:00 PM - 9:00 PM")
+    contact_number = models.CharField(max_length=50, blank=True, null=True, help_text="Appointment Contact")
+    is_active = models.BooleanField(default=True, help_text="Active/Inactive Status")
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_active', '-created']
+
+    def __str__(self):
+        return f"{self.doctor} - {self.hospital_name} ({self.designation or 'Affiliated'})"
+
+
 class PracticeLocation(models.Model):
     class LocationType(models.TextChoices):
         HOSPITAL = "hospital", "Hospital"
@@ -129,6 +150,7 @@ class PracticeLocation(models.Model):
     address = models.CharField(max_length=300, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
     contact_number = models.CharField(max_length=20, blank=True, null=True)
+    consultation_fee = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     is_active = models.BooleanField(default=True)

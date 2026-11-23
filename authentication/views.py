@@ -41,6 +41,7 @@ class SignupViewSet(GenericViewSet):
     _PROFILE_CREATORS = {
         'doctor':      ProfileCreationService.create_doctor_profile,
         'user':        ProfileCreationService.create_user_profile,
+        'regular':     ProfileCreationService.create_user_profile,
         'blood_donor': ProfileCreationService.create_blood_donor_profile,
         'ambulance':   ProfileCreationService.create_ambulance_profile,
         'pharmacy':    ProfileCreationService.create_pharmacy_profile,
@@ -50,6 +51,7 @@ class SignupViewSet(GenericViewSet):
     _SUCCESS_MESSAGES = {
         'doctor':      'Doctor registered successfully.',
         'user':        'User registered successfully.',
+        'regular':     'User registered successfully.',
         'blood_donor': 'Blood donor registered successfully.',
         'ambulance':   'Ambulance registered successfully.',
         'pharmacy':    'Pharmacy registered successfully.',
@@ -59,9 +61,9 @@ class SignupViewSet(GenericViewSet):
     # --------------------------------------------------
     # SHARED REGISTER HELPER
     # --------------------------------------------------
-    def _register(self, request, serializer_class):
+    def _register(self, request, serializer_class, default_user_type=None):
         email     = request.data.get('email')
-        user_type = request.data.get('user_type')
+        user_type = request.data.get('user_type') or default_user_type
         serializer = serializer_class(data=request.data)
 
         logger.info(f'{email}_register_attempt', extra={'email': email})
@@ -113,7 +115,7 @@ class SignupViewSet(GenericViewSet):
     
     @action(detail=False, methods=['post'], url_path='doctor/register')
     def doctor_register(self, request):
-        return self._register(request, DoctorSignUPSerializer)
+        return self._register(request, DoctorSignUPSerializer, default_user_type='doctor')
         
 
 
@@ -147,7 +149,7 @@ class SignupViewSet(GenericViewSet):
     )
     @action(detail=False, methods=['post'], url_path='user/register')
     def user_register(self, request):
-        return self._register(request, UserSignUpSerializer)
+        return self._register(request, UserSignUpSerializer, default_user_type='regular')
 
 
 
@@ -183,7 +185,7 @@ class SignupViewSet(GenericViewSet):
     )
     @action(detail=False, methods=['post'], url_path='blood-donor/register')
     def blood_donor_register(self, request):
-        return self._register(request, BloodDonorSignUpSerializer)
+        return self._register(request, BloodDonorSignUpSerializer, default_user_type='blood_donor')
 
 
 
@@ -216,7 +218,7 @@ class SignupViewSet(GenericViewSet):
     )
     @action(detail=False, methods=['post'], url_path='ambulance/register')
     def ambulance_register(self, request):
-        return self._register(request, AmbulanceSignUpSerializer)
+        return self._register(request, AmbulanceSignUpSerializer, default_user_type='ambulance')
 
 
 
@@ -245,7 +247,7 @@ class SignupViewSet(GenericViewSet):
     )
     @action(detail=False, methods=['post'], url_path='pharmacy/register')
     def pharmacy_register(self, request):
-        return self._register(request, PharmacySignUpSerializer)
+        return self._register(request, PharmacySignUpSerializer, default_user_type='pharmacy')
 
 
 
@@ -274,7 +276,7 @@ class SignupViewSet(GenericViewSet):
     )
     @action(detail=False, methods=['post'], url_path='diagnostic/register')
     def diagnostic_register(self, request):
-        return self._register(request, DiagnosticSignUpSerializer)
+        return self._register(request, DiagnosticSignUpSerializer, default_user_type='diagnostic')
 
 
 
@@ -340,7 +342,7 @@ class SignupViewSet(GenericViewSet):
             logger.warning('verify_cache_miss', extra={'email': email})
             return Response({'error': 'Signup session expired. Please register again.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user_type = signup_data.pop('user_type', None)
+        user_type = signup_data.get('user_type')
         create_fn = self._PROFILE_CREATORS.get(user_type)
         if not create_fn:
             logger.error('verify_unknown_user_type', extra={'email': email, 'user_type': user_type})
@@ -352,7 +354,7 @@ class SignupViewSet(GenericViewSet):
             refresh = RefreshToken.for_user(user)
             logger.info('verify_signup_complete', extra={'email': email, 'user_type': user_type})
             return Response({
-                'message':   self._SUCCESS_MESSAGES[user_type],
+                'message':   self._SUCCESS_MESSAGES.get(user_type, 'Registered successfully.'),
                 'user_id':   user.id,
                 'email':     user.email,
                 'user_type': user.user_type,
@@ -482,7 +484,7 @@ class LoginViewSet(GenericViewSet):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class LogoutViewSet(GenericViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     @swagger_auto_schema(
         tags=['Login Access Management'],

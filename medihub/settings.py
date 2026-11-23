@@ -68,6 +68,7 @@ INSTALLED_APPS = [
 
     # Third Party
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "drf_yasg",
     "corsheaders",
     "django_filters",
@@ -496,9 +497,25 @@ EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.smtp.
 EMAIL_HOST = config("EMAIL_HOST", default=config("SMTP_HOST", default="smtp.gmail.com"))
 EMAIL_PORT = config("EMAIL_PORT", default=config("SMTP_PORT", default=587, cast=int), cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
-EMAIL_HOST_USER = config("EMAIL_HOST_USER", default=config("SMTP_USER", default=""))
-EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default=config("SMTP_PASSWORD", default=""))
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default=config("SMTP_FROM", default="Medihub Bangladesh"))
+
+_email_user = config("EMAIL_HOST_USER", default="")
+if not _email_user or _email_user == "your-email@gmail.com":
+    _email_user = config("SMTP_USER", default="")
+
+_email_pass = config("EMAIL_HOST_PASSWORD", default="")
+if not _email_pass or _email_pass == "your-gmail-app-password":
+    _email_pass = config("SMTP_PASSWORD", default="")
+
+_email_from = config("DEFAULT_FROM_EMAIL", default="")
+if not _email_from or "your-email@gmail.com" in _email_from:
+    _email_from = config("SMTP_FROM", default="Medihub Bangladesh")
+
+if _email_from and "<" not in _email_from and "@" in _email_from:
+    _email_from = f"Medihub Bangladesh <{_email_from}>"
+
+EMAIL_HOST_USER = _email_user
+EMAIL_HOST_PASSWORD = _email_pass
+DEFAULT_FROM_EMAIL = _email_from
 OTP_EXPIRE_TIME = config("OTP_EXPIRE_TIME", default=300, cast=int)
 
 print(f"📧 EMAIL: Backend={EMAIL_BACKEND.split('.')[-2]}, OTP expires in {OTP_EXPIRE_TIME}s")
@@ -672,6 +689,7 @@ RABBITMQ_PORT = config("RABBITMQ_PORT", default="5672")
 
 CELERY_BROKER_URL = f"amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@{RABBITMQ_HOST}:{RABBITMQ_PORT}//"
 CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_TASK_DEFAULT_QUEUE = "default"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
