@@ -725,6 +725,15 @@ CELERY_BEAT_SCHEDULE = {
 print(f"🐇 CELERY: Broker=RabbitMQ@{RABBITMQ_HOST}, Backend=Redis")
 
 
+# =============================================
+# SECURITY & PRIVACY HARDENING HEADERS
+# =============================================
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
+
 print("\n" + "=" * 60)
 print("✅ MEDIHUB SETTINGS LOADED SUCCESSFULLY")
 print("=" * 60 + "\n")

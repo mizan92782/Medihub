@@ -187,9 +187,9 @@ class DoctorScheduling(models.Model):
 
 class DoctorDateSlot(models.Model):
     schedule = models.ForeignKey(DoctorScheduling, on_delete=models.CASCADE, related_name='date_slots')
-    date = models.DateField()
-    is_approved = models.BooleanField(default=False)
-    status = models.CharField(max_length=20, choices=ScheduleInstanceStatus.choices, default=ScheduleInstanceStatus.OPEN)
+    date = models.DateField(db_index=True)
+    is_approved = models.BooleanField(default=False, db_index=True)
+    status = models.CharField(max_length=20, choices=ScheduleInstanceStatus.choices, default=ScheduleInstanceStatus.OPEN, db_index=True)
     max_patients = models.PositiveIntegerField(default=30)
     bookings_count = models.PositiveIntegerField(default=0)
 
@@ -239,11 +239,11 @@ class DoctorBooking(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='bookings')
     schedule = models.ForeignKey(DoctorScheduling, on_delete=models.SET_NULL, null=True, blank=True)
     date_slot = models.ForeignKey(DoctorDateSlot, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
-    appointment_date = models.DateField()
+    appointment_date = models.DateField(db_index=True)
     patient_name = models.CharField(max_length=200)
     contact_number = models.CharField(max_length=15)
     problem_description = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=25, choices=DoctorBookingStatusChoices.choices, default=DoctorBookingStatusChoices.PENDING)
+    status = models.CharField(max_length=25, choices=DoctorBookingStatusChoices.choices, default=DoctorBookingStatusChoices.PENDING, db_index=True)
     practice_location = models.ForeignKey(PracticeLocation, on_delete=models.SET_NULL, null=True, blank=True, related_name="bookings")
     appointment_number = models.PositiveIntegerField(default=1)
     
