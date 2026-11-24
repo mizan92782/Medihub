@@ -5,6 +5,7 @@ from django.urls import path, include
 from medihub.health_check import HealthCheck
 from medihub.queue_dashboard import queue_dashboard, TeshMessageQuee
 from medihub.views import AdminDashboardStatsView, AdminUserListView, AdminTrafficStatsView, PublicStatsView, AdminLogsView, serve_dashboard
+from medihub.sitemaps import SitemapXMLView, RobotsTxtView
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from rest_framework import permissions
@@ -31,6 +32,8 @@ def serve_sw(request):
     return HttpResponse(content, content_type='application/javascript')
 
 urlpatterns = [
+    path('sitemap.xml', SitemapXMLView.as_view(), name='sitemap-xml'),
+    path('robots.txt', RobotsTxtView.as_view(), name='robots-txt'),
     path('admin/', admin.site.urls),
     path('api/admin/dashboard-stats/', AdminDashboardStatsView.as_view(), name='admin-dashboard-stats'),
     path('api/admin/users/', AdminUserListView.as_view(), name='admin-users'),
