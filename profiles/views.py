@@ -801,9 +801,10 @@ class PharmacyMedicineViewSet(viewsets.ModelViewSet):
     filterset_fields = ['pharmacy', 'category', 'in_stock']
     search_fields = ['name', 'generic_name', 'brand_name', 'category', 'description']
     ordering_fields = ['price', 'name', 'created']
+    ordering = ['-created', '-id']
 
     def get_queryset(self):
-        return PharmacyMedicine.objects.select_related('pharmacy').filter(pharmacy__is_active=True, pharmacy__user__is_blocked=False)
+        return PharmacyMedicine.objects.select_related('pharmacy').filter(pharmacy__is_active=True, pharmacy__user__is_blocked=False).order_by('-created', '-id')
 
     def create(self, request, *args, **kwargs):
         if not request.user.is_authenticated or request.user.user_type != 'pharmacy':
@@ -815,6 +816,27 @@ class PharmacyMedicineViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(pharmacy=pharmacy)
         return Response(APIResponse.success("Medicine added successfully", "medicine", serializer.data), status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or request.user.user_type != 'pharmacy':
+            return Response(APIResponse.error("Only registered pharmacies can edit medicines"), status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        if instance.pharmacy.user != request.user:
+            return Response(APIResponse.error("You can only edit medicines belonging to your pharmacy"), status=status.HTTP_403_FORBIDDEN)
+        partial = kwargs.pop('partial', False)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(APIResponse.success("Medicine updated successfully", "medicine", serializer.data))
+
+    def destroy(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or request.user.user_type != 'pharmacy':
+            return Response(APIResponse.error("Only registered pharmacies can delete medicines"), status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        if instance.pharmacy.user != request.user:
+            return Response(APIResponse.error("You can only delete medicines belonging to your pharmacy"), status=status.HTTP_403_FORBIDDEN)
+        instance.delete()
+        return Response(APIResponse.success("Medicine deleted successfully"), status=status.HTTP_200_OK)
 
 
 class DiagnosticViewSet(viewsets.ModelViewSet):

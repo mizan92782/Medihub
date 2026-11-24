@@ -15,10 +15,12 @@ class PharmacyViewSet(viewsets.ModelViewSet):
     search_fields = ['pharmacy_name', 'license_number', 'contact_number']
 
 class PharmacyMedicineViewSet(viewsets.ModelViewSet):
-    queryset = PharmacyMedicine.objects.all().select_related('pharmacy')
+    queryset = PharmacyMedicine.objects.all().select_related('pharmacy').order_by('-created', '-id')
     serializer_class = PharmacyMedicineSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     pagination_class = StandardResultsSetPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['pharmacy', 'in_stock']
     search_fields = ['name', 'generic_name', 'brand_name']
+    ordering_fields = ['price', 'name', 'created']
+    ordering = ['-created', '-id']
