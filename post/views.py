@@ -44,35 +44,10 @@ from donor.serializers import BloodDonationPostSerializer
 
 
 def _notify_followers_new_post(author, post_type, post_id, summary):
-    """Send in-app + push notification to all followers of author when they create a post."""
+    """Delegate follower notifications to background Celery worker for fast API response."""
     try:
-        from interactions.models.user_follow import UserFollow
-        from notification.servcies import AppNotificationService, PushNotification
-        followers = UserFollow.objects.filter(following=author).select_related('follower')
-        author_name = author.email.split('@')[0]
-        try:
-            if hasattr(author, 'doctor') and author.doctor:
-                d = author.doctor
-                author_name = f"Dr. {d.first_name} {d.last_name}".strip() or author_name
-            elif hasattr(author, 'profile') and author.profile:
-                p = author.profile
-                author_name = f"{p.first_name} {p.last_name}".strip() or author_name
-            elif hasattr(author, 'blood_donor') and author.blood_donor:
-                d = author.blood_donor
-                author_name = f"{d.first_name} {d.last_name}".strip() or author_name
-        except Exception:
-            pass
-        title = f"{author_name} posted something new"
-        message = f"{author_name}: {summary}"
-        for follow in followers:
-            AppNotificationService.create_notification(
-                user=follow.follower,
-                title=title,
-                message=message,
-                post_id=post_id,
-                post_type=post_type,
-            )
-            PushNotification.send_to_user(follow.follower, title, message)
+        from post.tasks import notify_followers_new_post_task
+        notify_followers_new_post_task.delay(author.id, post_type, post_id, summary)
     except Exception:
         pass
 
@@ -102,22 +77,40 @@ class BloodNeedPostViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='urgent', permission_classes=[AllowAny])
     def urgent_posts(self, request):
-        posts = BloodNeedPost.objects.filter(
+        posts = list(BloodNeedPost.objects.filter(
             is_urgent_post=True,
             status='open'
-        ).select_related('user', 'division', 'district', 'upozila').order_by('-created')
+        ).select_related('user', 'division', 'district', 'upozila').order_by('-created')[:50])
+        
+        if not posts:
+            return Response(APIResponse.success("Urgent blood posts", "posts", []))
+
         ct = ContentType.objects.get_for_model(BloodNeedPost)
+        post_ids = [p.id for p in posts]
+
+        likes_map = dict(
+            PostLike.objects.filter(content_type=ct, object_id__in=post_ids)
+            .values('object_id').annotate(count=Count('id'))
+            .values_list('object_id', 'count')
+        )
+        comments_map = dict(
+            PostComment.objects.filter(content_type=ct, object_id__in=post_ids)
+            .values('object_id').annotate(count=Count('id'))
+            .values_list('object_id', 'count')
+        )
+        user_liked_set = set()
+        if request.user.is_authenticated:
+            user_liked_set = set(
+                PostLike.objects.filter(content_type=ct, object_id__in=post_ids, user=request.user)
+                .values_list('object_id', flat=True)
+            )
+
         data = []
         for post in posts:
-            likes = PostLike.objects.filter(content_type=ct, object_id=post.id).count()
-            comments = PostComment.objects.filter(content_type=ct, object_id=post.id).count()
-            user_liked = False
-            if request.user.is_authenticated:
-                user_liked = PostLike.objects.filter(content_type=ct, object_id=post.id, user=request.user).exists()
             item = BloodNeedPostSerializer(post).data
-            item['likes_count'] = likes
-            item['comments_count'] = comments
-            item['user_has_liked'] = user_liked
+            item['likes_count'] = likes_map.get(post.id, 0)
+            item['comments_count'] = comments_map.get(post.id, 0)
+            item['user_has_liked'] = post.id in user_liked_set
             data.append(item)
         return Response(APIResponse.success("Urgent blood posts", "posts", data))
 

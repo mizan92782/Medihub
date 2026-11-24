@@ -1,6 +1,7 @@
 import logging
 import hashlib
 import random
+import secrets
 from django.core.cache import cache
 from django.conf import settings
 from django.db import transaction, DatabaseError
@@ -29,7 +30,7 @@ class AuthEmailService:
     # ---------------------------
     @staticmethod
     def generate_otp():
-        return str(random.randint(100000, 999999))
+        return f"{secrets.randbelow(900000) + 100000:06d}"
 
     @classmethod
     def hash_otp(cls, otp):
@@ -113,15 +114,24 @@ class AuthEmailService:
         return {'status': True, 'message': 'OTP resent to email.'}
     @classmethod
     def verify_otp(cls, email, input_otp):
+        attempt_key = f'auth:otp_attempts:{hashlib.sha256(email.encode()).hexdigest()}'
+        attempts = cache.get(attempt_key, 0)
+        if attempts >= 5:
+            cls.invalidate_otp(email)
+            return {'status': False, 'message': 'Too many failed attempts. OTP has been invalidated for security. Please request a new one.'}
+
         cached_otp = cls.get_otp(email)
 
         if not cached_otp:
             return {'status': False, 'message': 'OTP expired or not found'}
 
         if cached_otp == cls.hash_otp(input_otp):
+            cache.delete(attempt_key)
             return {'status': True, 'message': 'OTP verified successfully'}
 
-        return {'status': False, 'message': 'Invalid OTP'}
+        cache.set(attempt_key, attempts + 1, timeout=300)
+        remaining = 5 - (attempts + 1)
+        return {'status': False, 'message': f'Invalid OTP. {remaining} attempt(s) remaining.' if remaining > 0 else 'Invalid OTP. Attempt limit reached.'}
 
 
 
@@ -240,7 +250,7 @@ class LoginService:
             return {'status': False, 'message': 'Your account has been blocked by admin. Please contact support.'}
 
         if getattr(user, 'two_factor_enabled', False):
-            otp     = str(random.randint(100000, 999999))
+            otp     = f"{secrets.randbelow(900000) + 100000:06d}"
             timeout = getattr(settings, 'OTP_EXPIRE_TIME', 300)
             otp_key = hashlib.sha256(f'auth:login_2fa:{email}'.encode()).hexdigest()
             cache.set(otp_key, hashlib.sha256(otp.encode()).hexdigest(), timeout=timeout)
@@ -358,7 +368,7 @@ class PasswordResetService:
             logger.warning('password_reset_email_not_found', extra={'email': email})
             return {'status': True, 'message': 'If this email exists, an OTP has been sent.'}
 
-        otp     = str(random.randint(100000, 999999))
+        otp     = f"{secrets.randbelow(900000) + 100000:06d}"
         timeout = getattr(settings, 'OTP_EXPIRE_TIME', 300)
         otp_key = hashlib.sha256(f'{cls.RESET_OTP_PREFIX}:{email}'.encode()).hexdigest()
         cache.set(otp_key, hashlib.sha256(otp.encode()).hexdigest(), timeout=timeout)
@@ -375,7 +385,14 @@ class PasswordResetService:
     # ---------------------------
     @classmethod
     def verify_otp(cls, email, otp_input):
+        attempt_key = f'auth:reset_otp_attempts:{hashlib.sha256(email.encode()).hexdigest()}'
+        attempts = cache.get(attempt_key, 0)
         otp_key    = hashlib.sha256(f'{cls.RESET_OTP_PREFIX}:{email}'.encode()).hexdigest()
+
+        if attempts >= 5:
+            cache.delete(otp_key)
+            return {'status': False, 'message': 'Too many failed attempts. Reset OTP has been invalidated. Please request a new one.'}
+
         cached_otp = cache.get(otp_key)
 
         if not cached_otp:
@@ -383,11 +400,14 @@ class PasswordResetService:
             return {'status': False, 'message': 'OTP expired or not found.'}
 
         if cached_otp != hashlib.sha256(otp_input.encode()).hexdigest():
+            cache.set(attempt_key, attempts + 1, timeout=300)
             logger.warning('password_reset_otp_invalid', extra={'email': email})
-            return {'status': False, 'message': 'Invalid OTP.'}
+            remaining = 5 - (attempts + 1)
+            return {'status': False, 'message': f'Invalid OTP. {remaining} attempt(s) remaining.' if remaining > 0 else 'Invalid OTP. Attempt limit reached.'}
 
-        # OTP valid — generate a short-lived reset token
-        reset_token = hashlib.sha256(f'{email}:{random.randint(0, 999999)}'.encode()).hexdigest()
+        # OTP valid — generate a cryptographically secure short-lived reset token
+        cache.delete(attempt_key)
+        reset_token = secrets.token_urlsafe(32)
         token_key   = hashlib.sha256(f'{cls.RESET_TOKEN_PREFIX}:{email}'.encode()).hexdigest()
         cache.set(token_key, reset_token, timeout=300)  # 5 min to use token
         cache.delete(otp_key)  # invalidate OTP

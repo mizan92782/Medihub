@@ -23,8 +23,9 @@ CORE SETTINGS: Fundamental Django configurations.
 """
 SECRET_KEY = config("SECRET_KEY")
 
-PRODUCTION = config("PRODUCTION", default=False, cast=bool)
-DEBUG = config("DEBUG", default=True, cast=bool)
+_bool_cast = lambda v: str(v).strip().lower() in ("true", "1", "t", "yes", "y", "debug", "production", "prod")
+PRODUCTION = config("PRODUCTION", default=False, cast=_bool_cast)
+DEBUG = config("DEBUG", default=True, cast=lambda v: str(v).strip().lower() in ("true", "1", "t", "yes", "y", "debug"))
 
 if PRODUCTION:
     DEBUG = False
@@ -241,6 +242,7 @@ DATABASES = {
         "PASSWORD": config("POSTGRES_PASSWORD", default=config("DB_PASSWORD")),
         "HOST": os.environ.get("DB_HOST", config("DB_HOST", default="127.0.0.1")),
         "PORT": config("DB_PORT", default="5432"),
+        "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", default=300, cast=int),
     }
 }
 print(f"📊 DATABASE: PostgreSQL → {DATABASES['default']['NAME']} @ {DATABASES['default']['HOST']}")
@@ -355,7 +357,10 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.AllowAny",
     ),
-    "DEFAULT_THROTTLE_CLASSES": [],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
@@ -461,17 +466,17 @@ BLACKLIST_AFTER_ROTATION=True:
 AUTH_HEADER_TYPES = ("Bearer",):
   - Token must be sent as: Authorization: Bearer <token>
 """
-ACCESS_TOKEN_DAYS = config("ACCESS_TOKEN_DAYS", default=60, cast=int)
-REFRESH_TOKEN_DAYS = config("REFRESH_TOKEN_DAYS", default=60, cast=int)
+ACCESS_TOKEN_MINUTES = config("ACCESS_TOKEN_MINUTES", default=120, cast=int)
+REFRESH_TOKEN_DAYS = config("REFRESH_TOKEN_DAYS", default=30, cast=int)
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=ACCESS_TOKEN_DAYS),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=ACCESS_TOKEN_MINUTES),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=REFRESH_TOKEN_DAYS),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
-print(f"🔑 JWT: Access={ACCESS_TOKEN_DAYS}d, Refresh={REFRESH_TOKEN_DAYS}d, rotation+blacklist enabled")
+print(f"🔑 JWT: Access={ACCESS_TOKEN_MINUTES}m, Refresh={REFRESH_TOKEN_DAYS}d, rotation+blacklist enabled")
 
 
 # =============================================
@@ -681,13 +686,15 @@ print("📋 LOGGING: JSON logging → console + logs/medihub.log + logs/medihub_
 
 
 # =============================================
-# CELERY & RABBITMQ
+# CELERY & BROKER CONFIGURATION
+# Default to Redis broker (reduces RAM usage by removing RabbitMQ overhead)
 RABBITMQ_USER = config("RABBITMQ_DEFAULT_USER", default="medihub")
 RABBITMQ_PASS = config("RABBITMQ_DEFAULT_PASS", default="medihub")
 RABBITMQ_HOST = config("RABBITMQ_HOST", default="rabbitmq")
 RABBITMQ_PORT = config("RABBITMQ_PORT", default="5672")
 
-CELERY_BROKER_URL = f"amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@{RABBITMQ_HOST}:{RABBITMQ_PORT}//"
+DEFAULT_BROKER_URL = REDIS_URL if USE_REDIS_CACHE else f"amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@{RABBITMQ_HOST}:{RABBITMQ_PORT}//"
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=DEFAULT_BROKER_URL)
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_DEFAULT_QUEUE = "default"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -699,30 +706,16 @@ CELERY_RESULT_EXTENDED = True
 
 # beat
 CELERY_BEAT_SCHEDULE = {
-    "beat-health-check-every-30s": {
+    "beat-health-check-every-5m": {
         "task": "medihub.tasks.beat_health_check",
-        "schedule": 30.0,
-    },
-    "beat-log-active-users-every-60s": {
-        "task": "medihub.tasks.beat_log_active_users",
-        "schedule": 60.0,
+        "schedule": 300.0,
     },
     "beat-cleanup-expired-otps-every-5m": {
         "task": "medihub.tasks.beat_cleanup_expired_otps",
         "schedule": 300.0,
     },
-    "beat-system-ping-every-10s": {
-        "task": "medihub.tasks.beat_system_ping",
-        "schedule": 10.0,
-    },
-    # "beat-system-email-send-me": {
-    #     "task": "medihub.tasks.send_me_email_everyminute",
-    #     "schedule": 60.0,
-    # },
-    
-    
 }
-print(f"🐇 CELERY: Broker=RabbitMQ@{RABBITMQ_HOST}, Backend=Redis")
+print(f"🐇 CELERY: Broker={CELERY_BROKER_URL.split('@')[-1]}, Backend=Redis")
 
 
 # =============================================

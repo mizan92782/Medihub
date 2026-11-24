@@ -14,6 +14,11 @@ class APIRequestLogMiddleware:
         if any(path.startswith(p) for p in SKIP_PREFIXES):
             return response
 
+        # Optimization: Skip fast idempotent GET reads (<400) to avoid synchronous DB writes
+        # Preserves full audit logs for state-mutating requests (POST/PUT/PATCH/DELETE) and all errors
+        if request.method == 'GET' and response.status_code < 400:
+            return response
+
         try:
             user = request.user if hasattr(request, 'user') and request.user.is_authenticated else None
             ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))

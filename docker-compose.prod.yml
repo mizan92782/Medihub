@@ -98,21 +98,21 @@ services:
       timeout: 5s
       retries: 5
 
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: medihub_rabbitmq
-    env_file:
-      - .env
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    restart: always
-    networks:
-      - app_network
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+#   rabbitmq:
+#     image: rabbitmq:3-management-alpine
+#     container_name: medihub_rabbitmq
+#     env_file:
+#       - .env
+#     volumes:
+#       - rabbitmq_data:/var/lib/rabbitmq
+#     restart: always
+#     networks:
+#       - app_network
+#     healthcheck:
+#       test: ["CMD", "rabbitmq-diagnostics", "ping"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
 
   celery_worker:
     image: ${DOCKER_IMAGE}
@@ -121,8 +121,6 @@ services:
     env_file:
       - .env
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       redis:
         condition: service_healthy
       migrate:
@@ -138,7 +136,7 @@ services:
     env_file:
       - .env
     depends_on:
-      rabbitmq:
+      redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully

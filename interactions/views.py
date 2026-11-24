@@ -42,21 +42,23 @@ class DoctorFollowViewSet(viewsets.ModelViewSet):
         if not doctor:
             return Response(APIResponse.error("Doctor not found"), status=status.HTTP_404_NOT_FOUND)
 
-        interaction, created = UserDoctorInteractionFollwDoctor.objects.get_or_create(
-            user=request.user, doctor=doctor,
-            defaults={'follow': True}
-        )
-        stats, _ = DoctorStats.objects.get_or_create(doctor=doctor)
-        if not created:
-            interaction.follow = not interaction.follow
-            interaction.save()
-            if interaction.follow:
-                stats.total_followers += 1
+        from django.db import transaction
+
+        with transaction.atomic():
+            interaction, created = UserDoctorInteractionFollwDoctor.objects.select_for_update().get_or_create(
+                user=request.user, doctor=doctor,
+                defaults={'follow': True}
+            )
+            DoctorStats.objects.get_or_create(doctor=doctor)
+            if not created:
+                interaction.follow = not interaction.follow
+                interaction.save(update_fields=['follow'])
+                if interaction.follow:
+                    DoctorStats.objects.filter(doctor=doctor).update(total_followers=F('total_followers') + 1)
+                else:
+                    DoctorStats.objects.filter(doctor=doctor, total_followers__gt=0).update(total_followers=F('total_followers') - 1)
             else:
-                stats.total_followers = max(0, stats.total_followers - 1)
-        else:
-            stats.total_followers += 1
-        stats.save()
+                DoctorStats.objects.filter(doctor=doctor).update(total_followers=F('total_followers') + 1)
 
         serializer = self.get_serializer(interaction)
         return Response(APIResponse.success("Follow status updated", "follow", serializer.data))

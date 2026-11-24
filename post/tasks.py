@@ -53,3 +53,50 @@ def send_urgent_blood_notifications(self, post_id):
     except Exception as exc:
         logger.error(f'urgent_blood_notify: failed for post {post_id} — {exc}')
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=10, queue='default')
+def notify_followers_new_post_task(self, author_id, post_type, post_id, summary):
+    """
+    Background task: dispatch notifications to all followers of an author when a post is created.
+    Runs asynchronously via Celery worker to keep HTTP request response fast.
+    """
+    try:
+        from authentication.models import User
+        from interactions.models.user_follow import UserFollow
+        from notification.servcies import AppNotificationService, PushNotification
+
+        author = User.objects.filter(id=author_id).first()
+        if not author:
+            return 'skipped: author not found'
+
+        followers = UserFollow.objects.filter(following=author).select_related('follower')
+        author_name = author.email.split('@')[0]
+        try:
+            if hasattr(author, 'doctor') and author.doctor:
+                d = author.doctor
+                author_name = f"Dr. {d.first_name} {d.last_name}".strip() or author_name
+            elif hasattr(author, 'profile') and author.profile:
+                p = author.profile
+                author_name = f"{p.first_name} {p.last_name}".strip() or author_name
+            elif hasattr(author, 'blood_donor') and author.blood_donor:
+                d = author.blood_donor
+                author_name = f"{d.first_name} {d.last_name}".strip() or author_name
+        except Exception:
+            pass
+
+        title = f"{author_name} posted something new"
+        message = f"{author_name}: {summary}"
+        for follow in followers:
+            AppNotificationService.create_notification(
+                user=follow.follower,
+                title=title,
+                message=message,
+                post_id=post_id,
+                post_type=post_type,
+            )
+            PushNotification.send_to_user(follow.follower, title, message)
+        return f"notified {followers.count()} followers"
+    except Exception as exc:
+        logger.error(f'notify_followers_task failed for author {author_id}: {exc}')
+        raise self.retry(exc=exc)

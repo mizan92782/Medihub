@@ -31,13 +31,20 @@ class SpecializationViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = StandardResultsSetPagination
 
 class DoctorBookingViewSet(viewsets.ModelViewSet):
-    queryset = DoctorBooking.objects.all().select_related('doctor', 'patient')
     serializer_class = DoctorBookingSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return DoctorBooking.objects.none()
+        if user.user_type == 'doctor' and hasattr(user, 'doctor'):
+            return DoctorBooking.objects.filter(doctor=user.doctor).select_related('doctor', 'user')
+        return DoctorBooking.objects.filter(user=user).select_related('doctor', 'user')
+
 class DoctorRatingViewSet(viewsets.ModelViewSet):
     queryset = DoctorRating.objects.all()
     serializer_class = DoctorRatingSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
     pagination_class = StandardResultsSetPagination

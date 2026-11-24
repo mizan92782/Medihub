@@ -260,43 +260,42 @@ class DoctorBooking(models.Model):
         is_new = self.pk is None
         from django.db import transaction
 
-        if is_new and self.date_slot:
-            # Check slot status
-            if self.date_slot.status != "open":
-                raise ValueError("Cannot book a paused or cancelled appointment date slot.")
-            
-            # Atomic capacity check and increment using transaction row-lock
-            with transaction.atomic():
+        with transaction.atomic():
+            if is_new and self.date_slot:
+                # Check slot status
+                if self.date_slot.status != "open":
+                    raise ValueError("Cannot book a paused or cancelled appointment date slot.")
+                
+                # Atomic capacity check and increment using transaction row-lock
                 locked_slot = DoctorDateSlot.objects.select_for_update().get(id=self.date_slot.id)
                 if locked_slot.bookings_count >= locked_slot.max_patients:
                     raise ValueError("This slot is already fully booked.")
                 
                 locked_slot.bookings_count += 1
-                locked_slot.save()
+                locked_slot.save(update_fields=['bookings_count'])
                 
                 self.date_slot.bookings_count = locked_slot.bookings_count
                 self.appointment_number = locked_slot.bookings_count
-            
-            # Sync schedule, practice location and date
-            self.schedule = self.date_slot.schedule
-            self.appointment_date = self.date_slot.date
-            if self.schedule:
-                self.practice_location = self.schedule.practice_location
+                
+                # Sync schedule, practice location and date
+                self.schedule = self.date_slot.schedule
+                self.appointment_date = self.date_slot.date
+                if self.schedule:
+                    self.practice_location = self.schedule.practice_location
 
-        # Handle capacity release when status transitions to cancelled
-        if not is_new and self.pk and self.date_slot:
-            orig = DoctorBooking.objects.get(pk=self.pk)
-            target_cancelled = ["cancelled", "cancelled_by_doctor"]
-            if self.status in target_cancelled and orig.status not in target_cancelled:
-                with transaction.atomic():
+            # Handle capacity release when status transitions to cancelled
+            if not is_new and self.pk and self.date_slot:
+                orig = DoctorBooking.objects.select_for_update().get(pk=self.pk)
+                target_cancelled = ["cancelled", "cancelled_by_doctor"]
+                if self.status in target_cancelled and orig.status not in target_cancelled:
                     locked_slot = DoctorDateSlot.objects.select_for_update().get(id=self.date_slot.id)
                     locked_slot.bookings_count = max(0, locked_slot.bookings_count - 1)
-                    locked_slot.save()
+                    locked_slot.save(update_fields=['bookings_count'])
                     self.date_slot.bookings_count = locked_slot.bookings_count
 
-        super().save(*args, **kwargs)
-        if is_new and hasattr(self.doctor, 'evaluation'):
-            DoctorStats.objects.filter(doctor=self.doctor).update(total_booking=models.F('total_booking') + 1)
+            super().save(*args, **kwargs)
+            if is_new and hasattr(self.doctor, 'evaluation'):
+                DoctorStats.objects.filter(doctor=self.doctor).update(total_booking=models.F('total_booking') + 1)
 
 
 class DoctorStats(models.Model):
