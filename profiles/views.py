@@ -92,7 +92,15 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     def by_user(self, request, user_id=None):
         profile = RegularUserProfile.objects.filter(user_id=user_id, is_active=True, user__is_blocked=False).first()
         if not profile:
-            return Response(APIResponse.error("Profile not found"), status=status.HTTP_404_NOT_FOUND)
+            from authentication.models import User
+            user = User.objects.filter(id=user_id, is_blocked=False).first()
+            if user:
+                profile, _ = RegularUserProfile.objects.get_or_create(
+                    user=user,
+                    defaults={'first_name': user.email.split('@')[0], 'last_name': 'Member'}
+                )
+            else:
+                return Response(APIResponse.error("Profile not found"), status=status.HTTP_404_NOT_FOUND)
         serializer = self.get_serializer(profile)
         return Response(APIResponse.success("User profile retrieved", "profile", serializer.data))
 
