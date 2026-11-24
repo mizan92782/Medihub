@@ -15,7 +15,11 @@ class NotificationViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
-        return AppNotification.objects.filter(user=self.request.user).order_by('-created_at')
+        qs = AppNotification.objects.filter(user=self.request.user).order_by('-created_at')
+        category = self.request.query_params.get('category')
+        if category and category != 'all':
+            qs = qs.filter(category=category)
+        return qs
 
     @action(detail=False, methods=['get'])
     @api_exception_handler

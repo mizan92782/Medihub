@@ -40,6 +40,10 @@ def send_urgent_blood_notifications(self, post_id):
                 user=donor.user,
                 title=title,
                 message=message,
+                category="emergency",
+                priority="urgent",
+                action_url="/community",
+                action_label="Respond to Donate",
                 post_id=post.id,
                 post_type='blood_need'
             )
@@ -92,6 +96,10 @@ def notify_followers_new_post_task(self, author_id, post_type, post_id, summary)
                 user=follow.follower,
                 title=title,
                 message=message,
+                category="social",
+                priority="normal",
+                action_url="/community",
+                action_label="Read Post",
                 post_id=post_id,
                 post_type=post_type,
             )

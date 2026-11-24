@@ -294,8 +294,45 @@ class DoctorBooking(models.Model):
                     self.date_slot.bookings_count = locked_slot.bookings_count
 
             super().save(*args, **kwargs)
-            if is_new and hasattr(self.doctor, 'evaluation'):
-                DoctorStats.objects.filter(doctor=self.doctor).update(total_booking=models.F('total_booking') + 1)
+            if is_new:
+                if hasattr(self.doctor, 'evaluation'):
+                    DoctorStats.objects.filter(doctor=self.doctor).update(total_booking=models.F('total_booking') + 1)
+
+                # Automated in-app & push notifications
+                try:
+                    from notification.servcies import AppNotificationService, PushNotification
+                    loc_name = self.practice_location.name if self.practice_location else "Chamber"
+                    # Notify Doctor
+                    if hasattr(self.doctor, 'user') and self.doctor.user:
+                        doc_title = f"New Serial #{self.appointment_number} Reserved"
+                        doc_msg = f"Patient {self.patient_name} booked serial #{self.appointment_number} for {self.appointment_date} at {loc_name}."
+                        AppNotificationService.create_notification(
+                            user=self.doctor.user,
+                            title=doc_title,
+                            message=doc_msg,
+                            category="appointment",
+                            priority="high",
+                            action_url="/profile?tab=appointments",
+                            action_label="View Bookings"
+                        )
+                        PushNotification.send_to_user(self.doctor.user, doc_title, doc_msg)
+
+                    # Notify Patient
+                    if self.user:
+                        pat_title = f"Serial #{self.appointment_number} Confirmed"
+                        pat_msg = f"Your appointment with Dr. {self.doctor.first_name} {self.doctor.last_name} is confirmed for {self.appointment_date}."
+                        AppNotificationService.create_notification(
+                            user=self.user,
+                            title=pat_title,
+                            message=pat_msg,
+                            category="appointment",
+                            priority="high",
+                            action_url="/profile?tab=appointments",
+                            action_label="View Serial Card"
+                        )
+                        PushNotification.send_to_user(self.user, pat_title, pat_msg)
+                except Exception:
+                    pass
 
 
 class DoctorStats(models.Model):

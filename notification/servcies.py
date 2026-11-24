@@ -4,20 +4,33 @@ from core.result import ServiceResult
 from firebase_admin import messaging
 logger = logging.getLogger(__name__)
 
-'''app notification -2 : Write services to creae notification'''
+'''app notification -2 : Write services to create rich notifications'''
 class AppNotificationService:
     @staticmethod
-    def create_notification(user, title="Undefined", message="Undefined", post_id=None, post_type=None):
+    def create_notification(
+        user,
+        title="Notification",
+        message="",
+        category="social",
+        priority="normal",
+        action_url=None,
+        action_label=None,
+        post_id=None,
+        post_type=None
+    ):
         try:
             notification = AppNotification.objects.create(
                 user=user,
                 title=title,
                 message=message,
+                category=category,
+                priority=priority,
+                action_url=action_url,
+                action_label=action_label,
                 post_id=post_id,
                 post_type=post_type,
             )
 
-            
             return ServiceResult(
                 success=True,
                 data=notification

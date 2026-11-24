@@ -8,5 +8,8 @@ class AppNotificationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AppNotification
-        fields = ["id", "user", "title", "message", "is_read", "post_id", "post_type", "created_at"]
+        fields = [
+            "id", "user", "category", "priority", "title", "message",
+            "is_read", "action_url", "action_label", "post_id", "post_type", "created_at"
+        ]
         read_only_fields = ["id", "user", "created_at"]
