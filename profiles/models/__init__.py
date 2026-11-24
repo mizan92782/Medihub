@@ -22,3 +22,4 @@ from .ambulance_prof_mod import AmbulanceProfile, AmbulanceReview
 from .pharmacy_prof_mod import PharmacyProfile, PharmacyMedicine
 from .diagnostic_prof_mod import DiagnosticProfile, DiagnosticTest
 from .blood_donor_mod import BloodDonor, BloodDonationPost
+from .sponsor_banner_mod import SponsorBanner

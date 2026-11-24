@@ -25,6 +25,7 @@ from profiles.models import (
     PharmacyMedicine,
     DiagnosticProfile,
     DiagnosticTest,
+    SponsorBanner,
 )
 
 
@@ -300,3 +301,20 @@ class DiagnosticProfileSerializer(serializers.ModelSerializer):
         model = DiagnosticProfile
         fields = '__all__'
         read_only_fields = ['user', 'license_number', 'created', 'updated']
+
+
+class SponsorBannerSerializer(serializers.ModelSerializer):
+    is_currently_running = serializers.BooleanField(read_only=True)
+    slot_display = serializers.CharField(source='get_slot_display', read_only=True)
+
+    class Meta:
+        model = SponsorBanner
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at', 'impressions_count', 'clicks_count']
+
+    def validate(self, data):
+        start = data.get('start_date') or (self.instance.start_date if self.instance else None)
+        end = data.get('end_date') or (self.instance.end_date if self.instance else None)
+        if start and end and end < start:
+            raise serializers.ValidationError({"end_date": "End date cannot be earlier than start date."})
+        return data

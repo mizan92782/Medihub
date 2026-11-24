@@ -21,6 +21,8 @@ from profiles.models.ambulance_prof_mod import AmbulanceProfile
 from profiles.models.pharmacy_prof_mod import PharmacyProfile, PharmacyMedicine
 from profiles.models.diagnostic_prof_mod import DiagnosticProfile, DiagnosticTest
 from profiles.models.blood_donor_mod import BloodDonor, BloodDonationPost
+from profiles.models.sponsor_banner_mod import SponsorBanner
+from django.utils.html import format_html
 
 
 @admin.register(User)
@@ -183,3 +185,23 @@ class BloodDonationPostAdmin(admin.ModelAdmin):
     list_display = ['id', 'donor', 'medical_facility', 'donation_date', 'bags_donated', 'created']
     list_filter = ['donation_date', 'created']
     search_fields = ['donor__first_name', 'donor__last_name', 'medical_facility']
+
+
+@admin.register(SponsorBanner)
+class SponsorBannerAdmin(admin.ModelAdmin):
+    list_display = ['id', 'sponsor_name', 'slot', 'banner_preview', 'start_date', 'end_date', 'is_active', 'impressions_count', 'clicks_count', 'monthly_fee_bdt']
+    list_filter = ['slot', 'is_active', 'start_date', 'end_date']
+    search_fields = ['sponsor_name', 'title', 'contact_person', 'contact_phone']
+    readonly_fields = ['impressions_count', 'clicks_count', 'banner_preview_large', 'created_at', 'updated_at']
+
+    def banner_preview(self, obj):
+        if obj.banner_image:
+            return format_html('<img src="{}" style="height: 38px; border-radius: 4px; object-fit: cover;" />', obj.banner_image.url)
+        return "-"
+    banner_preview.short_description = "Preview"
+
+    def banner_preview_large(self, obj):
+        if obj.banner_image:
+            return format_html('<img src="{}" style="max-width: 480px; max-height: 200px; border-radius: 8px; object-fit: cover;" />', obj.banner_image.url)
+        return "-"
+    banner_preview_large.short_description = "Banner Image Preview"

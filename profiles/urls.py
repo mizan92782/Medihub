@@ -12,6 +12,7 @@ from profiles.views import (
     DiagnosticTestViewSet,
     MedicalMetadataViewSet,
     PracticeLocationViewSet,
+    SponsorBannerViewSet,
 )
 
 router = DefaultRouter()
@@ -27,5 +28,6 @@ router.register('diagnostics', DiagnosticViewSet, basename='diagnostic')
 router.register('diagnostic-tests', DiagnosticTestViewSet, basename='diagnostic-test')
 router.register('metadata', MedicalMetadataViewSet, basename='medical-metadata')
 router.register('practice-locations', PracticeLocationViewSet, basename='practice-location')
+router.register('banners', SponsorBannerViewSet, basename='sponsor-banner')
 
 urlpatterns = router.urls

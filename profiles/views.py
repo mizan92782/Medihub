@@ -3,6 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import F
+from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
@@ -44,6 +46,7 @@ from profiles.models import (
     PharmacyMedicine,
     DiagnosticProfile,
     DiagnosticTest,
+    SponsorBanner,
 )
 from profiles.serializers import (
     PracticeLocationSerializer,
@@ -63,6 +66,7 @@ from profiles.serializers import (
     PharmacyMedicineSerializer,
     DiagnosticProfileSerializer,
     DiagnosticTestSerializer,
+    SponsorBannerSerializer,
     SpecializationSerializer,
     SubSpecializationSerializer,
     QualificationSerializer,
@@ -1023,3 +1027,77 @@ class MedicalMetadataViewSet(viewsets.ViewSet):
         qs = Hospital.objects.all()
         serializer = HospitalSerializer(qs, many=True)
         return Response(APIResponse.success("Hospitals retrieved", "hospitals", serializer.data))
+
+
+class SponsorBannerViewSet(viewsets.ModelViewSet):
+    """
+    CRUD ViewSet for Sponsor Banners.
+    - Public / Clients can list active banners (or filter by ?slot=home_hero) and retrieve them.
+    - Public can track clicks and impressions via actions.
+    - Admin / Staff can create, edit, toggle, and delete banners.
+    """
+    queryset = SponsorBanner.objects.all()
+    serializer_class = SponsorBannerSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['slot', 'is_active']
+    search_fields = ['sponsor_name', 'title', 'contact_person']
+    ordering_fields = ['created_at', 'start_date', 'end_date', 'impressions_count', 'clicks_count', 'monthly_fee_bdt']
+    ordering = ['-created_at']
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'click', 'impression']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def check_permissions(self, request):
+        super().check_permissions(request)
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            is_admin = (
+                request.user.is_staff or 
+                request.user.is_superuser or 
+                getattr(request.user, 'user_type', None) == 'admin' or
+                getattr(request.user, 'role', None) == 'admin'
+            )
+            if not is_admin:
+                self.permission_denied(
+                    request,
+                    message="Only administrators can manage sponsor banners."
+                )
+
+    def get_queryset(self):
+        qs = SponsorBanner.objects.all()
+        user = self.request.user
+        is_admin_user = (
+            user.is_authenticated and (
+                user.is_staff or 
+                user.is_superuser or 
+                getattr(user, 'user_type', None) == 'admin' or
+                getattr(user, 'role', None) == 'admin'
+            )
+        )
+        
+        active_only = self.request.query_params.get('active_only')
+        slot = self.request.query_params.get('slot')
+
+        if not is_admin_user or active_only in ['true', '1']:
+            today = timezone.now().date()
+            qs = qs.filter(is_active=True, start_date__lte=today, end_date__gte=today)
+
+        if slot:
+            qs = qs.filter(slot=slot)
+
+        return qs
+
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def click(self, request, pk=None):
+        banner = self.get_object()
+        SponsorBanner.objects.filter(pk=banner.pk).update(clicks_count=F('clicks_count') + 1)
+        banner.refresh_from_db(fields=['clicks_count'])
+        return Response(APIResponse.success("Click recorded", "clicks", banner.clicks_count))
+
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def impression(self, request, pk=None):
+        banner = self.get_object()
+        SponsorBanner.objects.filter(pk=banner.pk).update(impressions_count=F('impressions_count') + 1)
+        banner.refresh_from_db(fields=['impressions_count'])
+        return Response(APIResponse.success("Impression recorded", "impressions", banner.impressions_count))
