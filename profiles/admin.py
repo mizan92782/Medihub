@@ -189,14 +189,16 @@ class BloodDonationPostAdmin(admin.ModelAdmin):
 
 @admin.register(SponsorBanner)
 class SponsorBannerAdmin(admin.ModelAdmin):
-    list_display = ['id', 'sponsor_name', 'slot', 'banner_preview', 'start_date', 'end_date', 'is_active', 'impressions_count', 'clicks_count', 'monthly_fee_bdt']
-    list_filter = ['slot', 'is_active', 'start_date', 'end_date']
+    list_display = ['id', 'sponsor_name', 'slot', 'media_type', 'skip_delay_seconds', 'banner_preview', 'start_date', 'end_date', 'is_active', 'impressions_count', 'clicks_count', 'monthly_fee_bdt']
+    list_filter = ['slot', 'media_type', 'is_active', 'start_date', 'end_date']
     search_fields = ['sponsor_name', 'title', 'contact_person', 'contact_phone']
     readonly_fields = ['impressions_count', 'clicks_count', 'banner_preview_large', 'created_at', 'updated_at']
 
     def banner_preview(self, obj):
         if obj.banner_image:
             return format_html('<img src="{}" style="height: 38px; border-radius: 4px; object-fit: cover;" />', obj.banner_image.url)
+        if obj.media_type == 'video':
+            return format_html('<span style="color: #2563eb; font-weight: bold;">▶ Video Ad</span>')
         return "-"
     banner_preview.short_description = "Preview"
 

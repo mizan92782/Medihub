@@ -9,11 +9,24 @@ class SponsorBanner(models.Model):
         ('feed_inline', 'Community Feed - Between Posts'),
         ('medicine_page', 'Medicine & Pharmacy Page'),
         ('sidebar', 'Global Sidebar'),
+        ('interstitial_popup', 'Welcome Modal / Interstitial Ad (First Visit Popup)'),
+    ]
+
+    MEDIA_TYPE_CHOICES = [
+        ('image', 'Static Graphic / Image'),
+        ('video', 'Video Ad (Upload or URL)'),
     ]
 
     sponsor_name = models.CharField(max_length=150, help_text="e.g. Popular Diagnostic Center, Square Pharmaceuticals")
     title = models.CharField(max_length=200, blank=True, help_text="Short campaign or banner headline")
-    banner_image = models.ImageField(upload_to='sponsors/banners/', help_text="Banner graphic (recommended 1200x300 or 800x400)")
+    media_type = models.CharField(max_length=20, choices=MEDIA_TYPE_CHOICES, default='image', help_text="Image or Video advertisement")
+    banner_image = models.ImageField(upload_to='sponsors/banners/', blank=True, null=True, help_text="Banner graphic (or video poster/thumbnail)")
+    banner_video = models.FileField(upload_to='sponsors/videos/', blank=True, null=True, help_text="Uploaded MP4/WebM video ad file")
+    video_url = models.CharField(max_length=500, blank=True, help_text="Direct video MP4/WebM URL or YouTube embed URL")
+    skip_delay_seconds = models.PositiveIntegerField(
+        default=10,
+        help_text="Mandatory viewing time in seconds before user can skip/close (e.g. 5, 10, 15, 20)"
+    )
     target_url = models.CharField(max_length=500, help_text="Redirect destination link upon user click (e.g. /doctors or https://...)")
     slot = models.CharField(max_length=50, choices=SLOT_CHOICES, default='home_hero')
 

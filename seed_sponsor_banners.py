@@ -165,6 +165,25 @@ def seed_banners():
             "subtext": "Fast digital reporting with consultant radiologist reviews.",
             "badge": "Modern Imaging",
             "cta": "Book Imaging →"
+        },
+        {
+            "slot": "interstitial_popup",
+            "sponsor_name": "Evercare Hospital Emergency & Trauma Care",
+            "title": "24/7 Emergency Ambulance & Critical ICU Response — Hotline 10678",
+            "target_url": "/ambulances",
+            "monthly_fee_bdt": 35000,
+            "contact_person": "Ashfaqur Rahman (Brand & Corporate)",
+            "contact_phone": "01720000006",
+            "filename": "evercare_welcome_popup.jpg",
+            "w": 900, "h": 500,
+            "bg1": (15, 23, 42), "bg2": (225, 29, 72), # Dark Slate to Medical Crimson
+            "brand": "Evercare Hospital Dhaka",
+            "headline": "24/7 Rapid Emergency & Critical Care",
+            "subtext": "Immediate ICU, Cardiac Trauma units & Emergency Teleconsultation.",
+            "badge": "★ Official Healthcare Partner",
+            "cta": "Emergency Help →",
+            "media_type": "image",
+            "skip_delay_seconds": 10
         }
     ]
 
@@ -181,6 +200,8 @@ def seed_banners():
             slot=item["slot"],
             defaults={
                 "title": item["title"],
+                "media_type": item.get("media_type", "image"),
+                "skip_delay_seconds": item.get("skip_delay_seconds", 10),
                 "banner_image": rel_path,
                 "target_url": item["target_url"],
                 "start_date": today,
