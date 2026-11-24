@@ -14,7 +14,7 @@ class SponsorBanner(models.Model):
     sponsor_name = models.CharField(max_length=150, help_text="e.g. Popular Diagnostic Center, Square Pharmaceuticals")
     title = models.CharField(max_length=200, blank=True, help_text="Short campaign or banner headline")
     banner_image = models.ImageField(upload_to='sponsors/banners/', help_text="Banner graphic (recommended 1200x300 or 800x400)")
-    target_url = models.URLField(help_text="Redirect destination link upon user click")
+    target_url = models.CharField(max_length=500, help_text="Redirect destination link upon user click (e.g. /doctors or https://...)")
     slot = models.CharField(max_length=50, choices=SLOT_CHOICES, default='home_hero')
 
     # Date scheduling

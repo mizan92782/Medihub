@@ -306,6 +306,7 @@ class DiagnosticProfileSerializer(serializers.ModelSerializer):
 class SponsorBannerSerializer(serializers.ModelSerializer):
     is_currently_running = serializers.BooleanField(read_only=True)
     slot_display = serializers.CharField(source='get_slot_display', read_only=True)
+    banner_image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = SponsorBanner
