@@ -1088,14 +1088,14 @@ class SponsorBannerViewSet(viewsets.ModelViewSet):
 
         return qs
 
-    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny], throttle_classes=[])
     def click(self, request, pk=None):
         banner = self.get_object()
         SponsorBanner.objects.filter(pk=banner.pk).update(clicks_count=F('clicks_count') + 1)
         banner.refresh_from_db(fields=['clicks_count'])
         return Response(APIResponse.success("Click recorded", "clicks", banner.clicks_count))
 
-    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny], throttle_classes=[])
     def impression(self, request, pk=None):
         banner = self.get_object()
         SponsorBanner.objects.filter(pk=banner.pk).update(impressions_count=F('impressions_count') + 1)

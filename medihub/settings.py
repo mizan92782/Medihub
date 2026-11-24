@@ -367,14 +367,14 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ),
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/hour",
-        "user": "1000/hour",
-        "login_user": "5/min",
-        "login_anon": "5/min",
-        "signup_user": "3/hour",
-        "signup_anon": "3/hour",
-        "otp": "10/hour",
-        "password_reset": "5/hour",
+        "anon": "5000/hour",
+        "user": "20000/hour",
+        "login_user": "30/min",
+        "login_anon": "30/min",
+        "signup_user": "20/hour",
+        "signup_anon": "20/hour",
+        "otp": "20/hour",
+        "password_reset": "10/hour",
     },
 }
 print("🔐 REST FRAMEWORK: JWT auth, rate limiting, and filtering configured")
