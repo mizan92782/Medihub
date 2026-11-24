@@ -12,16 +12,33 @@ class BlogMediaSerializer(serializers.ModelSerializer):
 
 class BlogCommentSerializer(serializers.ModelSerializer):
     user_email = serializers.ReadOnlyField(source='user.email')
+    user_name = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
 
     class Meta:
         model = BlogComment
-        fields = ['id', 'post', 'user', 'user_email', 'parent', 'content', 'like_count', 'replies', 'created', 'updated']
+        fields = ['id', 'post', 'user', 'user_email', 'user_name', 'parent', 'content', 'like_count', 'replies', 'created', 'updated']
         read_only_fields = ['user', 'like_count', 'created', 'updated']
+
+    def get_user_name(self, obj):
+        if not obj.user:
+            return "User"
+        u = obj.user
+        if hasattr(u, 'doctor') and u.doctor:
+            doc_name = f"Dr. {u.doctor.first_name} {u.doctor.last_name}".strip()
+            if doc_name != "Dr.":
+                return doc_name
+        if hasattr(u, 'regularuserprofile') and u.regularuserprofile and getattr(u.regularuserprofile, 'name', None):
+            return u.regularuserprofile.name
+        if hasattr(u, 'blood_donor_profile') and u.blood_donor_profile:
+            donor_name = f"{u.blood_donor_profile.first_name} {u.blood_donor_profile.last_name}".strip()
+            if donor_name:
+                return donor_name
+        return u.email.split('@')[0] if u.email else "User"
 
     def get_replies(self, obj):
         if obj.replies.exists():
-            return BlogCommentSerializer(obj.replies.all(), many=True).data
+            return BlogCommentSerializer(obj.replies.all(), many=True, context=self.context).data
         return []
 
 

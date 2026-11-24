@@ -110,8 +110,14 @@ class BlogPostViewSet(viewsets.ModelViewSet):
         liked = BlogLike.remove_like(post=post, user=request.user)
         if not liked:
             BlogLike.add_like(post=post, user=request.user)
-            return Response(APIResponse.success("Blog post liked", "liked", True))
-        return Response(APIResponse.success("Blog post unliked", "liked", False))
+            post.refresh_from_db(fields=['like_count'])
+            resp = APIResponse.success("Blog post liked", "liked", True)
+            resp["like_count"] = post.like_count
+            return Response(resp)
+        post.refresh_from_db(fields=['like_count'])
+        resp = APIResponse.success("Blog post unliked", "liked", False)
+        resp["like_count"] = post.like_count
+        return Response(resp)
 
 
 class BlogCommentViewSet(viewsets.ModelViewSet):
@@ -125,7 +131,11 @@ class BlogCommentViewSet(viewsets.ModelViewSet):
     filterset_fields = ['post', 'parent']
 
     def get_queryset(self):
-        return BlogComment.objects.filter(parent=None).select_related('user', 'post').prefetch_related('replies').all()
+        qs = BlogComment.objects.filter(parent=None).select_related('user', 'post').prefetch_related('replies', 'replies__user').all()
+        post_id = self.request.query_params.get('post')
+        if post_id:
+            qs = qs.filter(post_id=post_id)
+        return qs
 
     def create(self, request, *args, **kwargs):
         post_id = request.data.get('post')
