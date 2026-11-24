@@ -1161,7 +1161,18 @@ PLID (Prolapsed Lumbar Intervertebral Disc): যখন মেরুদণ্ড�
                 clicks_count=78,
             )
 
-        # 12. Generate Credentials Reference File
+        # 12. Assign Profile and Background Cover Photos
+        self.stdout.write("🎨 Populating Profile DPs and Background Cover Photos for all entities...")
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("pop_photos", os.path.join(settings.BASE_DIR, "populate_photos_and_covers.py"))
+            if spec and spec.loader:
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"Photo populator notification: {e}"))
+
+        # 13. Generate Credentials Reference File
         self.stdout.write("📝 Generating CREDENTIALS.md for deployment and admin handoff...")
         cred_text = f"""# 🏥 MediHub Deployment Credentials & Accounts Directory
 
