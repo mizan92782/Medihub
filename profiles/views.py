@@ -72,14 +72,29 @@ from profiles.serializers import (
 
 class UserProfileViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for current logged in Regular User Profile.
+    ViewSet for current logged in Regular User Profile and public profile view.
     """
     serializer_class = RegularUserProfileSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
+        if self.action in ['retrieve', 'list', 'by_user']:
+            return RegularUserProfile.objects.filter(is_active=True, user__is_blocked=False)
         return RegularUserProfile.objects.filter(user=self.request.user)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(APIResponse.success("User profile retrieved", "profile", serializer.data))
+
+    @action(detail=False, methods=['get'], url_path='by-user/(?P<user_id>[^/.]+)')
+    def by_user(self, request, user_id=None):
+        profile = RegularUserProfile.objects.filter(user_id=user_id, is_active=True, user__is_blocked=False).first()
+        if not profile:
+            return Response(APIResponse.error("Profile not found"), status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(profile)
+        return Response(APIResponse.success("User profile retrieved", "profile", serializer.data))
 
     def list(self, request, *args, **kwargs):
         # Public listing only shows active, non-blocked profiles
@@ -87,7 +102,7 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(qs, many=True)
         return Response(APIResponse.success("Profiles retrieved", "profiles", serializer.data))
 
-    @action(detail=False, methods=['get', 'put', 'patch'], url_path='me')
+    @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[IsAuthenticated], url_path='me')
     def me(self, request):
         profile, created = RegularUserProfile.objects.get_or_create(
             user=request.user,
