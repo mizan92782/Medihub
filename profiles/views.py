@@ -90,19 +90,59 @@ class UserProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='by-user/(?P<user_id>[^/.]+)')
     def by_user(self, request, user_id=None):
-        profile = RegularUserProfile.objects.filter(user_id=user_id, is_active=True, user__is_blocked=False).first()
+        from authentication.models import User
+        user = User.objects.filter(id=user_id, is_blocked=False).first()
+        if not user:
+            return Response(APIResponse.error("Profile not found"), status=status.HTTP_404_NOT_FOUND)
+
+        role = user.user_type
+        target_route = f"/user/{user.id}"
+        role_profile_id = user.id
+
+        if role == 'blood_donor' or getattr(user, 'blood_donor', None):
+            donor = getattr(user, 'blood_donor', None)
+            if donor:
+                role = 'blood_donor'
+                role_profile_id = donor.id
+                target_route = f"/donor-profile/{donor.id}"
+        elif role == 'doctor' or getattr(user, 'doctor', None):
+            doc = getattr(user, 'doctor', None)
+            if doc:
+                role = 'doctor'
+                role_profile_id = doc.id
+                target_route = f"/doctor-profile/{doc.id}"
+        elif role == 'ambulance' or getattr(user, 'ambulance', None):
+            amb = getattr(user, 'ambulance', None)
+            if amb:
+                role = 'ambulance'
+                role_profile_id = amb.id
+                target_route = f"/ambulance-profile/{amb.id}"
+        elif role == 'pharmacy' or getattr(user, 'pharmacy', None):
+            ph = getattr(user, 'pharmacy', None)
+            if ph:
+                role = 'pharmacy'
+                role_profile_id = ph.id
+                target_route = f"/pharmacy-profile/{ph.id}"
+        elif role == 'diagnostic' or getattr(user, 'diagnostic', None):
+            dg = getattr(user, 'diagnostic', None)
+            if dg:
+                role = 'diagnostic'
+                role_profile_id = dg.id
+                target_route = f"/diagnostic-profile/{dg.id}"
+
+        profile = RegularUserProfile.objects.filter(user=user, is_active=True).first()
         if not profile:
-            from authentication.models import User
-            user = User.objects.filter(id=user_id, is_blocked=False).first()
-            if user:
-                profile, _ = RegularUserProfile.objects.get_or_create(
-                    user=user,
-                    defaults={'first_name': user.email.split('@')[0], 'last_name': 'Member'}
-                )
-            else:
-                return Response(APIResponse.error("Profile not found"), status=status.HTTP_404_NOT_FOUND)
+            profile, _ = RegularUserProfile.objects.get_or_create(
+                user=user,
+                defaults={'first_name': user.email.split('@')[0], 'last_name': 'Member'}
+            )
         serializer = self.get_serializer(profile)
-        return Response(APIResponse.success("User profile retrieved", "profile", serializer.data))
+        data = serializer.data
+        data['role'] = role
+        data['role_profile_id'] = role_profile_id
+        data['target_route'] = target_route
+
+        return Response(APIResponse.success("User profile retrieved", "profile", data))
 
     def list(self, request, *args, **kwargs):
         # Public listing only shows active, non-blocked profiles

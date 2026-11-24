@@ -572,32 +572,57 @@ class PostFeedViewSet(viewsets.ViewSet):
 
                 author_name = email.split("@")[0] if email else "User"
                 author_avatar = None
+                author_role = getattr(author_user, 'user_type', 'regular') if author_user else 'regular'
+                author_profile_id = u_id
+                author_route = f"/user/{u_id}" if u_id else "/community"
+
                 if author_user:
                     try:
-                        if hasattr(author_user, 'profile') and author_user.profile:
+                        # Check specific professional/donor roles first to give priority over default profile
+                        if author_role == 'blood_donor' or getattr(author_user, 'blood_donor', None):
+                            donor = getattr(author_user, 'blood_donor', None)
+                            if donor:
+                                author_role = 'blood_donor'
+                                author_profile_id = donor.id
+                                author_route = f"/donor-profile/{donor.id}"
+                                author_name = f"{donor.first_name} {donor.last_name}".strip() or author_name
+                                author_avatar = donor.profile_dp.url if donor.profile_dp else None
+                        elif author_role == 'doctor' or getattr(author_user, 'doctor', None):
+                            doc = getattr(author_user, 'doctor', None)
+                            if doc:
+                                author_role = 'doctor'
+                                author_profile_id = doc.id
+                                author_route = f"/doctor-profile/{doc.id}"
+                                author_name = f"Dr. {doc.first_name} {doc.last_name}".strip()
+                                author_avatar = doc.profile_dp.url if doc.profile_dp else None
+                        elif author_role == 'ambulance' or getattr(author_user, 'ambulance', None):
+                            amb = getattr(author_user, 'ambulance', None)
+                            if amb:
+                                author_role = 'ambulance'
+                                author_profile_id = amb.id
+                                author_route = f"/ambulance-profile/{amb.id}"
+                                author_name = amb.owner_name or author_name
+                                author_avatar = amb.profile_dp.url if amb.profile_dp else None
+                        elif author_role == 'pharmacy' or getattr(author_user, 'pharmacy', None):
+                            ph = getattr(author_user, 'pharmacy', None)
+                            if ph:
+                                author_role = 'pharmacy'
+                                author_profile_id = ph.id
+                                author_route = f"/pharmacy-profile/{ph.id}"
+                                author_name = ph.pharmacy_name or author_name
+                                author_avatar = ph.profile_dp.url if ph.profile_dp else None
+                        elif author_role == 'diagnostic' or getattr(author_user, 'diagnostic', None):
+                            dg = getattr(author_user, 'diagnostic', None)
+                            if dg:
+                                author_role = 'diagnostic'
+                                author_profile_id = dg.id
+                                author_route = f"/diagnostic-profile/{dg.id}"
+                                author_name = dg.diagnostic_name or author_name
+                                author_avatar = dg.profile_dp.url if dg.profile_dp else None
+                        elif hasattr(author_user, 'profile') and author_user.profile:
                             prof = author_user.profile
                             author_name = f"{prof.first_name} {prof.last_name}".strip() or author_name
                             author_avatar = prof.profile_dp.url if prof.profile_dp else None
-                        elif hasattr(author_user, 'doctor') and author_user.doctor:
-                            doc = author_user.doctor
-                            author_name = f"Dr. {doc.first_name} {doc.last_name}".strip()
-                            author_avatar = doc.profile_dp.url if doc.profile_dp else None
-                        elif hasattr(author_user, 'blood_donor') and author_user.blood_donor:
-                            donor = author_user.blood_donor
-                            author_name = f"{donor.first_name} {donor.last_name}".strip() or author_name
-                            author_avatar = donor.profile_dp.url if donor.profile_dp else None
-                        elif hasattr(author_user, 'ambulance') and author_user.ambulance:
-                            amb = author_user.ambulance
-                            author_name = amb.owner_name or author_name
-                            author_avatar = amb.profile_dp.url if amb.profile_dp else None
-                        elif hasattr(author_user, 'pharmacy') and author_user.pharmacy:
-                            ph = author_user.pharmacy
-                            author_name = ph.pharmacy_name or author_name
-                            author_avatar = ph.profile_dp.url if ph.profile_dp else None
-                        elif hasattr(author_user, 'diagnostic') and author_user.diagnostic:
-                            dg = author_user.diagnostic
-                            author_name = dg.diagnostic_name or author_name
-                            author_avatar = dg.profile_dp.url if dg.profile_dp else None
                     except Exception:
                         pass
 
@@ -676,6 +701,9 @@ class PostFeedViewSet(viewsets.ViewSet):
                     "user_id": u_id,
                     "author_name": author_name,
                     "author_avatar": author_avatar,
+                    "author_role": author_role,
+                    "author_profile_id": author_profile_id,
+                    "author_route": author_route,
                     "post_type": p_type,
                     "created": post.created,
                     "urgency": getattr(post, 'urgency', 'medium'),
@@ -801,32 +829,56 @@ class PostFeedViewSet(viewsets.ViewSet):
 
         author_name = email.split("@")[0] if email else "User"
         author_avatar = None
+        author_role = getattr(author_user, 'user_type', 'regular') if author_user else 'regular'
+        author_profile_id = user_id
+        author_route = f"/user/{user_id}" if user_id else "/community"
+
         if author_user:
             try:
-                if hasattr(author_user, 'profile') and author_user.profile:
+                if author_role == 'blood_donor' or getattr(author_user, 'blood_donor', None):
+                    donor = getattr(author_user, 'blood_donor', None)
+                    if donor:
+                        author_role = 'blood_donor'
+                        author_profile_id = donor.id
+                        author_route = f"/donor-profile/{donor.id}"
+                        author_name = f"{donor.first_name} {donor.last_name}".strip() or author_name
+                        author_avatar = donor.profile_dp.url if donor.profile_dp else None
+                elif author_role == 'doctor' or getattr(author_user, 'doctor', None):
+                    doc = getattr(author_user, 'doctor', None)
+                    if doc:
+                        author_role = 'doctor'
+                        author_profile_id = doc.id
+                        author_route = f"/doctor-profile/{doc.id}"
+                        author_name = f"Dr. {doc.first_name} {doc.last_name}".strip()
+                        author_avatar = doc.profile_dp.url if doc.profile_dp else None
+                elif author_role == 'ambulance' or getattr(author_user, 'ambulance', None):
+                    amb = getattr(author_user, 'ambulance', None)
+                    if amb:
+                        author_role = 'ambulance'
+                        author_profile_id = amb.id
+                        author_route = f"/ambulance-profile/{amb.id}"
+                        author_name = amb.owner_name or author_name
+                        author_avatar = amb.profile_dp.url if amb.profile_dp else None
+                elif author_role == 'pharmacy' or getattr(author_user, 'pharmacy', None):
+                    ph = getattr(author_user, 'pharmacy', None)
+                    if ph:
+                        author_role = 'pharmacy'
+                        author_profile_id = ph.id
+                        author_route = f"/pharmacy-profile/{ph.id}"
+                        author_name = ph.pharmacy_name or author_name
+                        author_avatar = ph.profile_dp.url if ph.profile_dp else None
+                elif author_role == 'diagnostic' or getattr(author_user, 'diagnostic', None):
+                    dg = getattr(author_user, 'diagnostic', None)
+                    if dg:
+                        author_role = 'diagnostic'
+                        author_profile_id = dg.id
+                        author_route = f"/diagnostic-profile/{dg.id}"
+                        author_name = dg.diagnostic_name or author_name
+                        author_avatar = dg.profile_dp.url if dg.profile_dp else None
+                elif hasattr(author_user, 'profile') and author_user.profile:
                     prof = author_user.profile
                     author_name = f"{prof.first_name} {prof.last_name}".strip() or author_name
                     author_avatar = prof.profile_dp.url if prof.profile_dp else None
-                elif hasattr(author_user, 'doctor') and author_user.doctor:
-                    doc = author_user.doctor
-                    author_name = f"Dr. {doc.first_name} {doc.last_name}".strip()
-                    author_avatar = doc.profile_dp.url if doc.profile_dp else None
-                elif hasattr(author_user, 'blood_donor') and author_user.blood_donor:
-                    donor = author_user.blood_donor
-                    author_name = f"{donor.first_name} {donor.last_name}".strip() or author_name
-                    author_avatar = donor.profile_dp.url if donor.profile_dp else None
-                elif hasattr(author_user, 'ambulance') and author_user.ambulance:
-                    amb = author_user.ambulance
-                    author_name = amb.owner_name or author_name
-                    author_avatar = amb.profile_dp.url if amb.profile_dp else None
-                elif hasattr(author_user, 'pharmacy') and author_user.pharmacy:
-                    ph = author_user.pharmacy
-                    author_name = ph.pharmacy_name or author_name
-                    author_avatar = ph.profile_dp.url if ph.profile_dp else None
-                elif hasattr(author_user, 'diagnostic') and author_user.diagnostic:
-                    dg = author_user.diagnostic
-                    author_name = dg.diagnostic_name or author_name
-                    author_avatar = dg.profile_dp.url if dg.profile_dp else None
             except Exception:
                 pass
 
@@ -837,6 +889,9 @@ class PostFeedViewSet(viewsets.ViewSet):
             "user_id": user_id,
             "author_name": author_name,
             "author_avatar": author_avatar,
+            "author_role": author_role,
+            "author_profile_id": author_profile_id,
+            "author_route": author_route,
             "post_type": post_type,
             "created": post.created,
             "urgency": getattr(post, 'urgency', 'medium'),
